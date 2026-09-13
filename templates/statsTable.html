@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;min-height:100%;font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#f4f7fb}
+body{
+  padding:22px;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(66,153,225,.30), transparent 34%),
+    radial-gradient(circle at 88% 85%, rgba(139,92,246,.22), transparent 34%),
+    linear-gradient(135deg,#101827,#171b25 48%,#0f131c);
+}
+.stats-container{
+  width:1460px;
+  padding:22px;
+  border-radius:22px;
+  background:rgba(18,22,31,.80);
+  border:1px solid rgba(255,255,255,.13);
+  box-shadow:0 24px 70px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter:blur(18px);
+}
+.topbar{
+  display:flex;align-items:center;gap:18px;margin-bottom:18px;
+  padding:8px 4px 18px;border-bottom:1px solid rgba(255,255,255,.10)
+}
+.topbar .avatar{
+  width:82px;height:82px;border-radius:14px;object-fit:cover;
+  image-rendering:auto;box-shadow:0 8px 24px rgba(0,0,0,.35)
+}
+.player{font-size:30px;font-weight:800;letter-spacing:.2px}
+.subtitle{margin-top:5px;color:#9da8b8;font-size:14px}
+.badge{
+  display:inline-flex;margin-top:9px;padding:5px 10px;border-radius:8px;
+  background:rgba(255,255,255,.07);color:#cbd5e1;font-size:12px;font-weight:700
+}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{
+  min-height:310px;padding:18px;border-radius:17px;
+  background:linear-gradient(145deg,rgba(39,45,57,.86),rgba(23,27,36,.90));
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 12px 30px rgba(0,0,0,.25);
+}
+.card h2{font-size:18px;color:#48c9ff;margin-bottom:16px;font-weight:800}
+.card.profile h2{color:#b9a7ff}
+.card.economy h2{color:#5eea96}
+.card.play h2{color:#58d6ff}
+.card.combat h2{color:#ff7d86}
+.row{
+  display:flex;align-items:center;gap:11px;padding:12px 8px;
+  border-radius:11px;margin-bottom:7px;background:rgba(255,255,255,.035)
+}
+.icon{
+  width:42px;height:42px;object-fit:contain;image-rendering:auto;flex:0 0 42px;
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.45))
+}
+.info{min-width:0;flex:1}
+.label{font-size:13px;color:#aeb7c5;font-weight:600}
+.value{font-size:17px;font-weight:800;color:#fff;margin-top:3px;overflow-wrap:anywhere}
+.empty{color:#788496;font-size:13px;padding:15px 5px}
+.footer{
+  margin-top:15px;text-align:center;color:#8290a3;font-size:12px;
+  padding-top:13px;border-top:1px solid rgba(255,255,255,.08)
+}
+@media(max-width:1100px){.stats-container{width:100%}.grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="stats-container">
+  <div class="topbar">
+    <img class="avatar" src="{{AVATAR}}" onerror="this.onerror=null;this.src='{{FALLBACK_AVATAR}}'">
+    <div>
+      <div class="player">{{PLAYER}}</div>
+      <div class="subtitle">KingMC.vn • Thống kê người chơi</div>
+      <span class="badge">{{STATUS}}</span>
+    </div>
+  </div>
+  <div class="grid">
+    <section class="card profile"><h2>Profile</h2>{{PROFILE}}</section>
+    <section class="card economy"><h2>Economy</h2>{{ECONOMY}}</section>
+    <section class="card play"><h2>Play</h2>{{PLAY}}</section>
+    <section class="card combat"><h2>Combat</h2>{{COMBAT}}</section>
+  </div>
+  <div class="footer">✦ KingMC.vn • Stats • Thiết kế bởi Kian</div>
+</div>
+</body>
+</html>
