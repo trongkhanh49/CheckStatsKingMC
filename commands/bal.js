@@ -106,7 +106,7 @@ module.exports = {
         });
 
       // Chế độ IMAGE: /bal chỉ hiển thị Money trong ảnh.
-      if (configHelper.getDisplayMode() === 'image') {
+      if (configHelper.getBalDisplayMode() === 'image') {
         try {
           const imageBuffer = await renderBalanceImage(targetPlayer, cleanVal);
           const attachment = new AttachmentBuilder(imageBuffer, {

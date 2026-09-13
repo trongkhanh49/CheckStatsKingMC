@@ -226,7 +226,7 @@ module.exports = {
 
       // Chế độ IMAGE: giữ nguyên dữ liệu /stats, chỉ đổi cách hiển thị
       // thành HTML -> Puppeteer -> PNG rồi gửi ảnh vào Discord.
-      if (configHelper.getDisplayMode() === 'image' && validItems.length > 0) {
+      if (configHelper.getStatsDisplayMode() === 'image' && validItems.length > 0) {
         try {
           const imageBuffer = await renderStatsImage(targetPlayer, validItems);
           const attachment = new AttachmentBuilder(imageBuffer, {
