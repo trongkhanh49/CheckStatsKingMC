@@ -19,7 +19,7 @@ module.exports = {
       .setColor('#2b2d31')
       .setThumbnail('https://mc-heads.net/head/BinhLH/3d')
       .setDescription(
-        `Chào mừng bạn đến với **KingMC Stats Bot**!\n` +
+        `Chào mừng bạn đến với **KingX**!\n` +
         `Bạn có thể sử dụng các lệnh bằng **Slash Command (\`/\`)** hoặc **Tiền tố (\`?\`)** trực tiếp trong kênh chat.`
       )
       .addFields(
@@ -61,7 +61,7 @@ module.exports = {
         }
       )
       .setTimestamp()
-      .setFooter({ text: 'KingMC.vn Stats Bot • By Kian Nguyen' });
+      .setFooter({ text: 'KingX • By Kian Nguyen' });
 
     if (interaction.editReply) {
       await interaction.editReply({ embeds: [embed] });

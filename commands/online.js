@@ -35,7 +35,7 @@ module.exports = {
             { name: '🌐 Thế giới', value: `\`${result.world || 'N/A'}\``, inline: true }
           )
           .setTimestamp()
-          .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+          .setFooter({ text: 'KingX • Thiết kế bởi BinhLH' });
 
         await interaction.editReply({ embeds: [embed] });
       } else {
@@ -47,7 +47,7 @@ module.exports = {
           .setThumbnail(`https://mc-heads.net/head/${targetPlayer}/3d`)
           .setDescription(`⚠️ **${serverMessage}**`)
           .setTimestamp()
-          .setFooter({ text: 'KingMC.vn Stats Bot • By Kian Nguyen' });
+          .setFooter({ text: 'KingX • By Kian Nguyen' });
 
         await interaction.editReply({ embeds: [embed] });
       }
@@ -61,7 +61,7 @@ module.exports = {
         .setDescription(`Không thể kiểm tra trạng thái của người chơi **${targetPlayer}**.\n\n⚠️ Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
         .setTimestamp()
-        .setFooter({ text: 'KingMC.vn Stats Bot • By Kian Nguyen' });
+        .setFooter({ text: 'KingX • By Kian Nguyen' });
 
       const row = new ActionRowBuilder()
         .addComponents(

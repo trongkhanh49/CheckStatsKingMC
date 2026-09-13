@@ -8,7 +8,8 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  AttachmentBuilder
 } = require('discord.js');
 
 const {
@@ -18,6 +19,8 @@ const {
 } = require('../helpers/utils');
 
 const { recordError } = require('../helpers/reportHelper');
+const configHelper = require('../helpers/configHelper');
+const { renderStatsImage } = require('../helpers/renderHelper');
 
 async function getApplicationEmoji(client, name) {
   if (!name) return '🔹';
@@ -132,7 +135,7 @@ module.exports = {
         )
         .setTimestamp()
         .setFooter({
-          text: 'KingMC.vn Stats Bot • By Kian Nguyen'
+          text: 'KingX • By Kian Nguyen'
         });
 
       const validItems = (result.items || [])
@@ -221,6 +224,36 @@ module.exports = {
         embed.setDescription(descriptionText);
       }
 
+      // Chế độ IMAGE: giữ nguyên dữ liệu /stats, chỉ đổi cách hiển thị
+      // thành HTML -> Puppeteer -> PNG rồi gửi ảnh vào Discord.
+      if (configHelper.getDisplayMode() === 'image' && validItems.length > 0) {
+        try {
+          const imageBuffer = await renderStatsImage(targetPlayer, validItems);
+          const attachment = new AttachmentBuilder(imageBuffer, {
+            name: 'stats.png'
+          });
+
+          const imageEmbed = new EmbedBuilder()
+            .setImage('attachment://stats.png')
+            .setColor('#2b2d31')
+            .setTimestamp()
+            .setFooter({
+              text: 'KingX • By Kian Nguyen'
+            });
+
+          return await interaction.editReply({
+            embeds: [imageEmbed],
+            files: [attachment]
+          });
+        } catch (renderError) {
+          console.error(
+            `[Discord-Bot] Render ảnh Stats thất bại cho ${targetPlayer}:`,
+            renderError.message
+          );
+          // Nếu render lỗi, fallback về embed cũ để lệnh vẫn hoạt động.
+        }
+      }
+
       await interaction.editReply({
         embeds: [embed]
       });
@@ -248,7 +281,7 @@ module.exports = {
         .setColor('#ef4444')
         .setTimestamp()
         .setFooter({
-          text: 'KingMC.vn Stats Bot • By Kian Nguyen'
+          text: 'KingX • By Kian Nguyen'
         });
 
       const row = new ActionRowBuilder()

@@ -8,10 +8,13 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  AttachmentBuilder
 } = require('discord.js');
 
 const { recordError } = require('../helpers/reportHelper');
+const configHelper = require('../helpers/configHelper');
+const { renderBalanceImage } = require('../helpers/renderHelper');
 
 async function getApplicationEmoji(client, name) {
   if (!name) return '🔹';
@@ -99,8 +102,37 @@ module.exports = {
         )
         .setTimestamp()
         .setFooter({
-          text: 'KingMC.vn Stats Bot • By Kian Nguyen'
+          text: 'KingX • By Kian Nguyen'
         });
+
+      // Chế độ IMAGE: /bal chỉ hiển thị Money trong ảnh.
+      if (configHelper.getDisplayMode() === 'image') {
+        try {
+          const imageBuffer = await renderBalanceImage(targetPlayer, cleanVal);
+          const attachment = new AttachmentBuilder(imageBuffer, {
+            name: 'bal.png'
+          });
+
+          const imageEmbed = new EmbedBuilder()
+            .setImage('attachment://bal.png')
+            .setColor('#2b2d31')
+            .setTimestamp()
+            .setFooter({
+              text: 'KingX • By Kian Nguyen'
+            });
+
+          return await interaction.editReply({
+            embeds: [imageEmbed],
+            files: [attachment]
+          });
+        } catch (renderError) {
+          console.error(
+            `[Discord-Bot] Render ảnh Balance thất bại cho ${targetPlayer}:`,
+            renderError.message
+          );
+          // Fallback về Embed cũ nếu Puppeteer/render gặp lỗi.
+        }
+      }
 
       await interaction.editReply({
         embeds: [embed]
@@ -129,7 +161,7 @@ module.exports = {
         .setColor('#ef4444')
         .setTimestamp()
         .setFooter({
-          text: 'KingMC.vn Stats Bot • By Kian Nguyen'
+          text: 'KingX • By Kian Nguyen'
         });
 
       const row = new ActionRowBuilder()

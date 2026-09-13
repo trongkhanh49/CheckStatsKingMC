@@ -38,7 +38,7 @@ module.exports = {
           .setDescription(`⚠️ Không có order (đơn hàng) nào cho **${itemDisplayName}**.`)
           .setColor('#ef4444')
           .setTimestamp()
-          .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+          .setFooter({ text: 'KingX • Thiết kế bởi BinhLH' });
 
         return await interaction.editReply({ embeds: [emptyEmbed] });
       }
@@ -74,7 +74,7 @@ module.exports = {
             .setImage('attachment://order_table.png')
             .setColor('#2b2d31')
             .setTimestamp()
-            .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+            .setFooter({ text: 'KingX • Thiết kế bởi BinhLH' });
 
           return await interaction.editReply({ embeds: [embed], files: [attachment] });
         }
@@ -86,7 +86,7 @@ module.exports = {
         .setTitle(`📦 Danh sách đơn hàng: **${itemQuery.toUpperCase()}** ${emoji}`)
         .setColor('#2b2d31')
         .setTimestamp()
-        .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+        .setFooter({ text: 'KingX • Thiết kế bởi BinhLH' });
 
       const formattedLines = orders.map((order, index) => {
         const priceText = order.price || 'N/A';
@@ -133,7 +133,7 @@ module.exports = {
         .setDescription(`Không thể lấy danh sách đơn hàng cho **${itemQuery}**.\n\n⚠️ Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
         .setTimestamp()
-        .setFooter({ text: 'KingMC.vn Stats Bot • By Kian' });
+        .setFooter({ text: 'KingX • By Kian' });
         
       const row = new ActionRowBuilder()
         .addComponents(
