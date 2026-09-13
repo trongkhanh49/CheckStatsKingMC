@@ -74,7 +74,7 @@ module.exports = {
             .setImage('attachment://ah_table.png')
             .setColor('#2b2d31')
             .setTimestamp()
-            .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+            .setFooter({ text: 'KingMC.vn Stats Bot • By Kian' });
 
           return await interaction.editReply({ embeds: [embed], files: [attachment] });
         }
