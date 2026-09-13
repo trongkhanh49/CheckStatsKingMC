@@ -8,7 +8,9 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '../config.json');
 
 const defaultConfig = {
-  displayMode: 'text' // 'text' hoặc 'image'
+  displayMode: 'text', // mode chung cũ cho AH/Order
+  balDisplayMode: 'text',
+  statsDisplayMode: 'text'
 };
 
 function loadConfig() {
@@ -36,6 +38,51 @@ let currentConfig = loadConfig();
 module.exports = {
   getDisplayMode() {
     return currentConfig.displayMode || 'text';
+  },
+  getBalDisplayMode() {
+    return currentConfig.balDisplayMode || 'text';
+  },
+  getStatsDisplayMode() {
+    return currentConfig.statsDisplayMode || 'text';
+  },
+  setBalDisplayMode(mode) {
+    if (mode === 'text' || mode === 'image') {
+      currentConfig.balDisplayMode = mode;
+      saveConfig(currentConfig);
+    }
+    return currentConfig.balDisplayMode;
+  },
+  setStatsDisplayMode(mode) {
+    if (mode === 'text' || mode === 'image') {
+      currentConfig.statsDisplayMode = mode;
+      saveConfig(currentConfig);
+    }
+    return currentConfig.statsDisplayMode;
+  },
+  toggleBalDisplayMode() {
+    currentConfig.balDisplayMode = currentConfig.balDisplayMode === 'image' ? 'text' : 'image';
+    saveConfig(currentConfig);
+    return currentConfig.balDisplayMode;
+  },
+  toggleStatsDisplayMode() {
+    currentConfig.statsDisplayMode = currentConfig.statsDisplayMode === 'image' ? 'text' : 'image';
+    saveConfig(currentConfig);
+    return currentConfig.statsDisplayMode;
+  },
+  setBalanceStatsDisplayMode(mode) {
+    if (mode === 'text' || mode === 'image') {
+      currentConfig.balDisplayMode = mode;
+      currentConfig.statsDisplayMode = mode;
+      saveConfig(currentConfig);
+    }
+    return mode === 'image' ? 'image' : 'text';
+  },
+  toggleBalanceStatsDisplayMode() {
+    const newMode = currentConfig.balDisplayMode === 'image' ? 'text' : 'image';
+    currentConfig.balDisplayMode = newMode;
+    currentConfig.statsDisplayMode = newMode;
+    saveConfig(currentConfig);
+    return newMode;
   },
   setDisplayMode(mode) {
     if (mode === 'text' || mode === 'image') {
