@@ -440,10 +440,198 @@ async function renderTableImage(title, itemQuery, items, type = 'order') {
   }
 }
 
+
+const STATS_TEMPLATE_PATH = path.join(__dirname, '../templates/statsTable.html');
+const BALANCE_TEMPLATE_PATH = path.join(__dirname, '../templates/balanceCard.html');
+
+function filterStatLore(lines) {
+  return (lines || [])
+    .map(line => cleanMinecraftText(line))
+    .filter(line => {
+      if (!line) return false;
+      if (/^[_\-+=*~]*$/.test(line)) return false;
+      if (/[-=_]{4,}/.test(line)) return false;
+      const lower = line.toLowerCase();
+      if (lower.includes('nhấp') || lower.includes('click') || lower.includes('click chuột')) return false;
+      return true;
+    });
+}
+
+function classifyStatItem(item) {
+  const haystack = normalizeSmallCaps([
+    item.name || '',
+    cleanMinecraftText(item.displayName || ''),
+    ...(item.lore || []).map(cleanMinecraftText)
+  ].join(' '));
+
+  if (/(money|balance|tien|xu|coin|shard|earned|spent|thu nhap|chi tieu|kiếm duoc|tieu)/.test(haystack)) {
+    return 'economy';
+  }
+  if (/(kill|death|mob|slain|giết|chet|ha guc|chien dau|combat)/.test(haystack)) {
+    return 'combat';
+  }
+  if (/(playtime|thoi gian|gio choi|blocks? (placed|broken)|block|dat|pha|online|offline|activity|hoat dong)/.test(haystack)) {
+    return 'play';
+  }
+  if (/(rank|danh hieu|cap do|level|profile|nguoi choi|status|trang thai|ten)/.test(haystack)) {
+    return 'profile';
+  }
+
+  // Fallback dựa trên tên item Minecraft để tránh đẩy dữ liệu vào sai cột.
+  const name = normalizeSmallCaps(item.name || '');
+  if (/(emerald|gold|amethyst|diamond|copper)/.test(name)) return 'economy';
+  if (/(sword|axe|bow|skull|zombie|skeleton)/.test(name)) return 'combat';
+  if (/(clock|pickaxe|brick|stone|block)/.test(name)) return 'play';
+  return 'profile';
+}
+
+function statRowHtml(item) {
+  const title = cleanMinecraftText(item.displayName || '') || formatItemDisplayName(item.name);
+  const lore = filterStatLore(item.lore);
+  const value = lore.length ? lore.join(' • ') : '—';
+  const iconUrl = getItemIconUrl(item.name);
+  return `
+    <div class="row">
+      <img class="icon" src="${iconUrl}" onerror="this.onerror=null;this.src='${SVG_QUESTION_MARK}'" alt="">
+      <div class="info">
+        <div class="label">${escapeHtml(title)}</div>
+        <div class="value">${escapeHtml(value)}</div>
+      </div>
+    </div>`;
+}
+
+function defaultProfileRows(player, status) {
+  return `
+    <div class="row">
+      <img class="icon" src="https://mc-heads.net/avatar/${encodeURIComponent(player)}/64" onerror="this.onerror=null;this.src='${SVG_QUESTION_MARK}'" alt="">
+      <div class="info"><div class="label">Người chơi</div><div class="value">${escapeHtml(player)}</div></div>
+    </div>
+    <div class="row">
+      <div class="icon" style="display:flex;align-items:center;justify-content:center;font-size:25px">●</div>
+      <div class="info"><div class="label">Trạng thái</div><div class="value">${escapeHtml(status)}</div></div>
+    </div>`;
+}
+
+async function renderStatsImage(player, items = []) {
+  let templateContent = fs.readFileSync(STATS_TEMPLATE_PATH, 'utf8');
+
+  const validItems = (items || []).filter(item => !isDecorationItemForRender(item));
+  const groups = { profile: [], economy: [], play: [], combat: [] };
+
+  for (const item of validItems) {
+    groups[classifyStatItem(item)].push(item);
+  }
+
+  const statusText = groups.profile.some(item => {
+    const text = normalizeSmallCaps([
+      item.displayName || '',
+      ...(item.lore || [])
+    ].map(cleanMinecraftText).join(' '));
+    return text.includes('online');
+  }) ? 'Online' : 'Offline';
+
+  const renderGroup = (key, emptyText) =>
+    groups[key].length
+      ? groups[key].map(statRowHtml).join('')
+      : `<div class="empty">${emptyText}</div>`;
+
+  const avatar = `https://mc-heads.net/avatar/${encodeURIComponent(player)}/128`;
+  const fallbackAvatar = `https://mc-heads.net/avatar/Steve/128`;
+
+  const html = templateContent
+    .replace('{{PLAYER}}', escapeHtml(player))
+    .replace('{{STATUS}}', escapeHtml(statusText))
+    .replace('{{AVATAR}}', avatar)
+    .replace('{{FALLBACK_AVATAR}}', fallbackAvatar)
+    .replace('{{PROFILE}}', groups.profile.length ? groups.profile.map(statRowHtml).join('') : defaultProfileRows(player, statusText))
+    .replace('{{ECONOMY}}', renderGroup('economy', 'Chưa có dữ liệu kinh tế'))
+    .replace('{{PLAY}}', renderGroup('play', 'Chưa có dữ liệu hoạt động'))
+    .replace('{{COMBAT}}', renderGroup('combat', 'Chưa có dữ liệu chiến đấu'));
+
+  return renderHtmlElement(html, '.stats-container', {
+    width: 1510,
+    height: 600
+  });
+}
+
+async function renderBalanceImage(player, money) {
+  let templateContent = fs.readFileSync(BALANCE_TEMPLATE_PATH, 'utf8');
+  const avatar = `https://mc-heads.net/avatar/${encodeURIComponent(player)}/128`;
+  const fallbackAvatar = `https://mc-heads.net/avatar/Steve/128`;
+
+  const html = templateContent
+    .replace('{{PLAYER}}', escapeHtml(player))
+    .replace('{{MONEY}}', escapeHtml(money))
+    .replace('{{AVATAR}}', avatar)
+    .replace('{{FALLBACK_AVATAR}}', fallbackAvatar);
+
+  return renderHtmlElement(html, '.balance-card', {
+    width: 760,
+    height: 320
+  });
+}
+
+async function renderHtmlElement(compiledHtml, selector, viewport = {}) {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+
+  try {
+    await page.setViewport({
+      width: viewport.width || 800,
+      height: viewport.height || 600,
+      deviceScaleFactor: 2
+    });
+
+    await page.setContent(compiledHtml, {
+      waitUntil: 'load',
+      timeout: 30000
+    });
+
+    await page.evaluate(async () => {
+      const images = Array.from(document.querySelectorAll('img'));
+      await Promise.all(images.map(img => new Promise(resolve => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        img.onload = finish;
+        img.onerror = finish;
+        if (img.complete) finish();
+        setTimeout(finish, 5000);
+      })));
+    });
+
+    const elementHandle = await page.$(selector);
+    if (!elementHandle) {
+      throw new Error(`Không tìm thấy container ${selector} trong HTML`);
+    }
+
+    return await elementHandle.screenshot({
+      type: 'png',
+      omitBackground: true
+    });
+  } finally {
+    await page.close();
+  }
+}
+
+function isDecorationItemForRender(item) {
+  const nameLower = (item.name || '').toLowerCase();
+  const displayName = cleanMinecraftText(item.displayName || '');
+  if (nameLower.includes('glass_pane') || nameLower === 'air' || nameLower === 'barrier') return true;
+  if (!displayName && (!item.lore || item.lore.length === 0)) return true;
+  if ((!item.lore || item.lore.length === 0) && (nameLower.includes('pane') || nameLower.includes('stained'))) return true;
+  return false;
+}
+
 module.exports = {
   renderTableImage,
   formatItemDisplayName,
   getItemIconUrl,
-  formatMinecraftTextToHtml
+  formatMinecraftTextToHtml,
+  renderStatsImage,
+  renderBalanceImage
 };
 
