@@ -439,11 +439,10 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
       console.log(`[Admin-Debug] Nhận tin nhắn: "${message.content}" từ User ID: ${message.author.id} (Tên: ${message.author.tag}). ADMIN_ID hiện tại trong .env là: "${ADMIN_ID}"`);
     }
 
-    // Kiểm tra ADMIN_ID nếu đã được cấu hình
-    if (ADMIN_ID && message.author.id !== ADMIN_ID) {
-      if (message.content.startsWith('!')) {
-         console.warn(`[Admin-Debug] Bỏ qua tin nhắn vì User ID (${message.author.id}) không khớp với ADMIN_ID (${ADMIN_ID}).`);
-      }
+    // TẤT CẢ lệnh tiền tố '!' chỉ dành cho Admin Bot đã cấu hình bằng ADMIN_ID.
+    // Nếu chưa cấu hình ADMIN_ID thì tuyệt đối không cho phép lệnh '!' chạy.
+    if (!ADMIN_ID || message.author.id !== ADMIN_ID) {
+      console.warn(`[Admin-Debug] Từ chối lệnh ! của User ID ${message.author.id}. ADMIN_ID=${ADMIN_ID ? ADMIN_ID : '(chưa cấu hình)'}`);
       return;
     }
     
@@ -453,7 +452,7 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
 
     try {
       if (command === 'help') {
-         await message.channel.send('**Danh sách lệnh Admin:**\n- `!status` hoặc `!workers`: Xem danh sách và trạng thái toàn bộ Workers (Local & Remote)\n- `!restart`: Random tên mới và khởi động lại bot ngay lập tức\n- `!mode` hoặc `!render`: Chuyển đổi chế độ hiển thị danh sách (Text / Image)\n- `!toggle off/on [lời nhắn]`: Bật/tắt việc nhận Slash Commands từ user khác.\n- `!ai off/on [lời nhắn]`: Bật/tắt tính năng trò chuyện AI với người dùng.');
+         await message.channel.send('**Danh sách lệnh Admin:**\n- `!status` hoặc `!workers`: Xem danh sách và trạng thái toàn bộ Workers (Local & Remote)\n- `!restart`: Random tên mới và khởi động lại bot ngay lập tức\n- `!bsmode`: Chuyển đổi BAL + STATS giữa Embed / Image\n- `!mode` hoặc `!render`: Chuyển đổi chế độ hiển thị AH + Order (Embed / Image)\n- `!toggle off/on [lời nhắn]`: Bật/tắt việc nhận Slash Commands từ user khác.\n- `!ai off/on [lời nhắn]`: Bật/tắt tính năng trò chuyện AI với người dùng.');
       } else if (command === 'ai') {
          const sub = args.shift()?.toLowerCase();
          if (sub === 'off') {
@@ -468,6 +467,18 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
             const statusStr = global.isAiChatEnabled ? '🟢 Đang **BẬT**' : `🔴 Đang **TẮT** (Lý do: \`${global.aiDisableReason}\`)`;
             await message.channel.send(`🤖 **Trạng thái AI Chat:** ${statusStr}\n\nCú pháp Admin: \`!ai on\` hoặc \`!ai off [lời nhắn]\``);
          }
+      } else if (command === 'bsmode') {
+         // BAL + STATS dùng chung một mode.
+         // !bsmode: TEXT <-> IMAGE
+         const newMode = configHelper.toggleBalanceStatsDisplayMode();
+
+         const modeDesc = newMode === 'image'
+           ? '🖼️ **IMAGE** — BAL + STATS sẽ render HTML → PNG'
+           : '📝 **TEXT / EMBED** — BAL + STATS dùng Embed Discord';
+
+         await message.channel.send(
+           `✅ **BAL + STATS MODE** → **${newMode.toUpperCase()}**\n${modeDesc}`
+         );
       } else if (command === 'mode' || command === 'render') {
          const targetMode = args.shift()?.toLowerCase();
          let newMode;
@@ -477,8 +488,8 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
            newMode = configHelper.toggleDisplayMode();
          }
          const modeDesc = newMode === 'image'
-           ? '🖼️ **IMAGE** (Tạo bảng HTML 3D Icon 32x32px đính kèm Embed PNG)'
-           : '📝 **TEXT** (Dòng chữ Embed truyền thống + Tên Item)';
+           ? '🖼️ **IMAGE** (Render HTML thành PNG rồi gửi vào Discord cho Bal/Stats/Order/AH)'
+           : '📝 **EMBED** (Hiển thị Embed truyền thống)';
          await message.channel.send(`✅ Đã chuyển đổi chế độ hiển thị danh sách sang: **${newMode.toUpperCase()}**\n${modeDesc}`);
       } else if (command === 'status' || command === 'workers') {
          const workers = await queueDispatcher.getAllWorkersStatus();
