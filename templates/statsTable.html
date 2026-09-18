@@ -5,22 +5,19 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;min-height:100%;font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#f4f7fb}
-body{
-  padding:22px;
-  background:
-    radial-gradient(circle at 12% 8%, rgba(66,153,225,.30), transparent 34%),
-    radial-gradient(circle at 88% 85%, rgba(139,92,246,.22), transparent 34%),
-    linear-gradient(135deg,#101827,#171b25 48%,#0f131c);
-}
-.stats-container{
-  width:1460px;
+body{padding:22px;background:transparent}
+.stats-container{position:relative;overflow:hidden;width:1460px;
   padding:22px;
   border-radius:22px;
-  background:rgba(18,22,31,.80);
+  background:linear-gradient(rgba(13,17,25,.72),rgba(18,22,31,.84)),url('{{BACKGROUND}}') center/cover no-repeat;
   border:1px solid rgba(255,255,255,.13);
   box-shadow:0 24px 70px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.05);
   backdrop-filter:blur(18px);
 }
+.stats-container::before{content:'';position:absolute;inset:-24px;background:url('{{BACKGROUND}}') center/cover no-repeat;filter:blur(11px);opacity:.30;transform:scale(1.04);z-index:0}
+.stats-container::after{content:'';position:absolute;inset:0;background:rgba(7,10,16,.18);z-index:0}
+.stats-container>*{position:relative;z-index:1}
+
 .topbar{
   display:flex;align-items:center;gap:18px;margin-bottom:18px;
   padding:8px 4px 18px;border-bottom:1px solid rgba(255,255,255,.10)
@@ -82,7 +79,7 @@ body{
     <section class="card play"><h2>Play</h2>{{PLAY}}</section>
     <section class="card combat"><h2>Combat</h2>{{COMBAT}}</section>
   </div>
-  <div class="footer">✦ KingMC.vn • Stats • Thiết kế bởi Kian</div>
+  <div class="footer">✦ KingMC.vn • Stats • Thiết kế bởi ntkhanh</div>
 </div>
 </body>
 </html>

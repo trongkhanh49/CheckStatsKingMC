@@ -6,14 +6,16 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{
   width:100%;padding:20px;font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#fff;
-  background:linear-gradient(135deg,#101827,#1b1e28 55%,#10151f)
+  background:transparent
 }
-.balance-card{
-  width:720px;min-height:245px;padding:24px;border-radius:22px;
-  background:linear-gradient(145deg,rgba(35,43,57,.96),rgba(18,22,30,.96));
+.balance-card{position:relative;overflow:hidden;width:720px;min-height:245px;padding:24px;border-radius:22px;
+  background:linear-gradient(rgba(16,21,31,.70),rgba(18,22,30,.84)),url('{{BACKGROUND}}') center/cover no-repeat;
   border:1px solid rgba(255,255,255,.12);
   box-shadow:0 20px 55px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);
 }
+.balance-card::before{content:'';position:absolute;inset:-20px;background:url('{{BACKGROUND}}') center/cover no-repeat;filter:blur(10px);opacity:.28;transform:scale(1.05);z-index:0}
+.balance-card>*{position:relative;z-index:1}
+
 .head{display:flex;align-items:center;gap:18px}
 .avatar{width:76px;height:76px;border-radius:13px;object-fit:cover}
 .player{font-size:25px;font-weight:800}
@@ -35,7 +37,7 @@ body{
     <div><div class="player">{{PLAYER}}</div><div class="sub">KingMC.vn • Số dư tài khoản</div></div>
   </div>
   <div class="money"><div class="label">Money</div><div class="value">{{MONEY}}</div></div>
-  <div class="footer">✦ KingMC.vn • Balance • Thiết kế bởi Kian</div>
+  <div class="footer">✦ KingMC.vn • Balance • Thiết kế bởi ntkhanh</div>
 </div>
 </body>
 </html>

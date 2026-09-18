@@ -10,21 +10,19 @@
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    body {
-      background-color: #111214;
-      color: #dbdee1;
-      padding: 16px;
-      display: inline-block;
-    }
+    body { background: transparent; color: #dbdee1; padding: 16px; display: inline-block; }
 
     .table-container {
-      background-color: #1e1f22;
+      position: relative; overflow: hidden;
+      background: linear-gradient(rgba(12,15,22,.76),rgba(18,21,29,.82)), url('{{BACKGROUND}}') center/cover no-repeat;
       border: 1px solid #2b2d31;
       border-radius: 14px;
       padding: 20px 24px;
       min-width: 540px;
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
     }
+    .table-container::before { content:''; position:absolute; inset:-16px; background:url('{{BACKGROUND}}') center/cover no-repeat; filter:blur(10px); opacity:.34; z-index:0; transform:scale(1.04); }
+    .table-container > * { position:relative; z-index:1; }
 
     .header {
       display: flex;
@@ -188,6 +186,7 @@
         {{ROWS}}
       </tbody>
     </table>
+    <div class="footer"><span>KingMC.vn</span><span>✦ Thiết kế bởi ntkhanh</span></div>
   </div>
 </body>
 </html>

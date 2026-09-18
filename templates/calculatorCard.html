@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}html,body{background:transparent;font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#fff}body{padding:24px}.calculator-card{position:relative;overflow:hidden;width:1032px;min-height:770px;padding:30px;border-radius:24px;background:linear-gradient(rgba(12,16,24,.68),rgba(17,21,30,.82)),url('{{BACKGROUND}}') center/cover no-repeat;border:1px solid rgba(255,255,255,.14);box-shadow:0 22px 65px rgba(0,0,0,.45)}.calculator-card::before{content:'';position:absolute;inset:-24px;background:url('{{BACKGROUND}}') center/cover no-repeat;filter:blur(11px);opacity:.28;transform:scale(1.04);z-index:0}.calculator-card::after{content:'';position:absolute;inset:0;background:rgba(7,10,16,.18);z-index:0}.calculator-card>*{position:relative;z-index:1}.header{padding:2px 4px 20px;border-bottom:1px solid rgba(255,255,255,.13)}.title{font-size:31px;font-weight:900;letter-spacing:.4px}.subtitle{margin-top:7px;color:#aeb8c7;font-size:14px}.calc-section{margin-top:18px;padding:19px;border-radius:18px;background:rgba(19,24,34,.68);border:1px solid rgba(255,255,255,.10);box-shadow:0 12px 28px rgba(0,0,0,.20)}.calc-section h2{font-size:18px;color:#53cfff;margin-bottom:15px}.calc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.calc-row{padding:13px 15px;border-radius:12px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.055)}.calc-label{font-size:12px;color:#9da8b8}.calc-value{margin-top:4px;font-size:20px;font-weight:850}.tone-green{color:#54ef96}.tone-red{color:#ff7b7b}.tone-gold{color:#ffbf45}.result{margin-top:20px;padding:22px;border-radius:18px;background:rgba(14,27,23,.68);border:1px solid rgba(78,239,150,.24)}.result-label{font-size:13px;color:#a7b3c0;text-transform:uppercase;letter-spacing:1px}.result-value{margin-top:4px;font-size:34px;font-weight:950}.result-positive{color:#54ef96}.result-negative{color:#ff7777}.result-neutral{color:#ffc45a}.footer{margin-top:16px;text-align:center;color:#8e9aaa;font-size:12px;padding-top:13px;border-top:1px solid rgba(255,255,255,.09)}
+</style>
+</head>
+<body>
+<div class="calculator-card">
+  <div class="header"><div class="title">{{TITLE}}</div><div class="subtitle">{{SUBTITLE}}</div></div>
+  {{SECTIONS}}
+  <div class="result"><div class="result-label">{{RESULT_LABEL}}</div><div class="result-value result-{{RESULT_TONE}}">{{RESULT_VALUE}}</div></div>
+  <div class="footer">✦ KingMC.vn • Thiết kế bởi ntkhanh</div>
+</div>
+</body>
+</html>
