@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:transparent;font-family:Arial,"Segoe UI",sans-serif;color:#fff}
+.leaderboard-card{width:1000px;min-height:700px;padding:32px;border-radius:24px;background:linear-gradient(145deg,#15171c,#23262e);box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.header{display:flex;align-items:center;gap:18px;margin-bottom:24px}.trophy{font-size:42px}.title{font-size:30px;font-weight:800;letter-spacing:.5px}.subtitle{font-size:14px;color:#9ca3af;margin-top:4px}
+.rows{display:flex;flex-direction:column;gap:8px}.lb-row{height:58px;display:grid;grid-template-columns:70px 48px 1fr 220px;align-items:center;gap:12px;padding:0 16px;border-radius:14px;background:#2b2f38}
+.lb-row:nth-child(1){background:linear-gradient(90deg,#66521a,#343027)}.lb-row:nth-child(2){background:linear-gradient(90deg,#4b5058,#30343b)}.lb-row:nth-child(3){background:linear-gradient(90deg,#5b3c25,#33302c)}
+.rank{font-weight:800;font-size:18px;color:#f3f4f6}.avatar{width:42px;height:42px;border-radius:7px;image-rendering:auto}.player{font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.value{text-align:right;font-size:18px;font-weight:800;color:#facc15}.empty{padding:30px;text-align:center;color:#9ca3af}
+</style>
+</head>
+<body>
+<div class="leaderboard-card">
+  <div class="header"><div class="trophy">🏆</div><div><div class="title">{{TITLE}}</div><div class="subtitle">Top 1–10 • KingMC</div></div></div>
+  <div class="rows">{{ROWS}}</div>
+</div>
+</body>
+</html>
