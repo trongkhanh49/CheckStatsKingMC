@@ -4,7 +4,7 @@ const {
   PermissionFlagsBits
 } = require("discord.js");
 
-const MAIN_GUILD_ID = "1544703241630261270";
+const MAIN_ANNOUNCEMENT_CHANNEL_ID = "1544703241630261270";
 const UPDATE_CHANNEL_NAME = "kingx-update";
 
 function isOwner(interaction) {
@@ -30,48 +30,50 @@ async function getOrCreateUpdateChannel(guild, client) {
 }
 
 async function followMainAnnouncementChannel(guild, channel, client) {
-  if (guild.id === MAIN_GUILD_ID) {
-    return { ok: true, skipped: true, reason: "main-server" };
+  if (channel.id === MAIN_ANNOUNCEMENT_CHANNEL_ID) {
+    return { ok: true, skipped: true, reason: "source-channel" };
   }
 
   try {
-    const mainGuild = await client.guilds.fetch(MAIN_GUILD_ID);
-    const source = await mainGuild.channels.fetch().then(channels =>
-      channels.find(
-        c =>
-          c &&
-          c.type === ChannelType.GuildAnnouncement &&
-          c.id === MAIN_GUILD_ID
-      )
+    // ID này là ID KÊNH thông báo chính, không phải ID server.
+    const sourceChannel = await client.channels.fetch(
+      MAIN_ANNOUNCEMENT_CHANNEL_ID,
+      { force: true }
     );
-
-    // ID được user cung cấp là server chính. Nếu ID đó thực tế là Guild ID,
-    // tìm channel announcement theo tên/id cấu hình bên dưới.
-    let sourceChannel = source;
-
-    if (!sourceChannel) {
-      sourceChannel = mainGuild.channels.cache.find(
-        c => c.type === ChannelType.GuildAnnouncement
-      );
-    }
 
     if (!sourceChannel) {
       return {
         ok: false,
-        reason: "Không tìm thấy Announcement Channel ở server chính."
+        reason: `Không tìm thấy kênh thông báo chính ${MAIN_ANNOUNCEMENT_CHANNEL_ID}.`
       };
     }
 
-    // Discord channel following: target phải là text channel trong server đích.
+    if (sourceChannel.type !== ChannelType.GuildAnnouncement) {
+      return {
+        ok: false,
+        reason: "Kênh ID đã cấu hình không phải Announcement Channel."
+      };
+    }
+
     if (typeof sourceChannel.addFollower !== "function") {
       return {
         ok: false,
-        reason: "Discord.js hiện tại không hỗ trợ addFollower()."
+        reason: "discord.js hiện tại không hỗ trợ addFollower()."
       };
     }
 
+    // Chỉ follow nếu kênh đích thuộc server khác.
+    if (sourceChannel.guildId === guild.id) {
+      return { ok: true, skipped: true, reason: "same-guild" };
+    }
+
     await sourceChannel.addFollower(channel, UPDATE_CHANNEL_NAME);
-    return { ok: true, skipped: false, sourceId: sourceChannel.id };
+
+    return {
+      ok: true,
+      skipped: false,
+      sourceId: sourceChannel.id
+    };
   } catch (error) {
     return {
       ok: false,
