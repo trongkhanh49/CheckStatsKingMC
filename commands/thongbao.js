@@ -1,51 +1,62 @@
-const { SlashCommandBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const {
+  SlashCommandBuilder,
+  ChannelType,
+  PermissionFlagsBits
+} = require('discord.js');
 
 const OWNER_ID = (process.env.ADMIN_ID || process.env.OWNER_ID || '').trim();
 const CHANNEL_NAME = 'kingx-update';
 
-function getAttachments(interaction) {
+function getFiles(interaction) {
   const files = [];
   for (let i = 1; i <= 10; i++) {
-    const attachment = interaction.options.getAttachment(`anh${i}`);
-    if (attachment) files.push(attachment.url);
+    const a = interaction.options.getAttachment(`anh${i}`);
+    if (a) files.push(a.url);
   }
   return files;
 }
 
-function progress(status, startedAt, created = false, error = '') {
+function statusText(status, files, startedAt, extra = '') {
   const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+  const done = status === 'Gửi thành công.' ? 1 : 0;
   return [
     '📢 **THÔNG BÁO KINGX**',
     `**Trạng thái:** ${status}`,
     `**Kênh:** #${CHANNEL_NAME}`,
-    `**Tiến trình:** ${status.includes('thành công') ? '1/1 (100%)' : '0/1 (0%)'}`,
-    status.includes('thành công') ? '████████████████████' : '░░░░░░░░░░░░░░░░░░░░',
+    `**Tiến trình:** ${done}/1 (${done ? 100 : 0}%)`,
+    done ? '████████████████████' : '░░░░░░░░░░░░░░░░░░░░',
+    `🖼️ Ảnh: **${files.length}/10**`,
     `⏱️ Thời gian: **${elapsed}s**`,
-    created ? '🆕 Đã tạo kênh mới.' : '',
-    error ? `\n❌ **Lỗi:** ${error}` : ''
+    extra
   ].filter(Boolean).join('\n');
 }
 
-async function findOrCreateUpdateChannel(guild, client) {
+async function findOrCreateChannel(guild, client) {
+  // Always search by name first.
   const existing = guild.channels.cache.find(
-    channel => channel.type === ChannelType.GuildText &&
-      channel.name.toLowerCase() === CHANNEL_NAME
+    c => c.type === ChannelType.GuildText &&
+         c.name.toLowerCase() === CHANNEL_NAME
   );
-
   if (existing) return { channel: existing, created: false };
 
-  // Use IDs only. Do not pass User/Role objects to the permission resolver.
-  const everyoneId = guild.roles.everyone.id;
-  const ownerId = guild.ownerId;
-  const botId = client.user.id;
+  // Fetch the actual cached objects before putting them into permissionOverwrites.
+  // This avoids "Supplied parameter is not a cached User or Role".
+  const [botMember, ownerMember, roles] = await Promise.all([
+    guild.members.fetch(client.user.id),
+    guild.members.fetch(guild.ownerId),
+    guild.roles.fetch()
+  ]);
 
-  const permissionOverwrites = [
+  const everyoneRole = roles.everyone;
+  if (!everyoneRole) throw new Error('Không tìm thấy @everyone role.');
+
+  const overwrites = [
     {
-      id: everyoneId,
+      id: everyoneRole,
       deny: [PermissionFlagsBits.ViewChannel]
     },
     {
-      id: botId,
+      id: botMember,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
@@ -54,7 +65,7 @@ async function findOrCreateUpdateChannel(guild, client) {
       ]
     },
     {
-      id: ownerId,
+      id: ownerMember,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.ReadMessageHistory
@@ -62,12 +73,12 @@ async function findOrCreateUpdateChannel(guild, client) {
     }
   ];
 
-  // Add every non-managed role that has Manage Server permission.
-  for (const [roleId, role] of guild.roles.cache) {
-    if (roleId === everyoneId || role.managed) continue;
+  // Only management roles can see the update channel.
+  for (const role of roles.values()) {
+    if (role.id === everyoneRole.id || role.managed) continue;
     if (role.permissions.has(PermissionFlagsBits.ManageGuild)) {
-      permissionOverwrites.push({
-        id: roleId,
+      overwrites.push({
+        id: role,
         allow: [
           PermissionFlagsBits.ViewChannel,
           PermissionFlagsBits.ReadMessageHistory
@@ -80,7 +91,7 @@ async function findOrCreateUpdateChannel(guild, client) {
     name: CHANNEL_NAME,
     type: ChannelType.GuildText,
     topic: 'Kênh thông báo KingX',
-    permissionOverwrites,
+    permissionOverwrites: overwrites,
     reason: 'Tạo kênh kingx-update cho /thongbao'
   });
 
@@ -91,12 +102,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('thongbao')
     .setDescription('Gửi thông báo vào kênh kingx-update.')
-    .addStringOption(o =>
-      o.setName('noidung')
-        .setDescription('Nội dung thông báo')
-        .setRequired(true)
-        .setMaxLength(2000)
-    )
+    .addStringOption(o => o.setName('noidung').setDescription('Nội dung thông báo').setRequired(true).setMaxLength(2000))
     .addAttachmentOption(o => o.setName('anh1').setDescription('Ảnh 1'))
     .addAttachmentOption(o => o.setName('anh2').setDescription('Ảnh 2'))
     .addAttachmentOption(o => o.setName('anh3').setDescription('Ảnh 3'))
@@ -124,38 +130,45 @@ module.exports = {
     }
 
     const content = interaction.options.getString('noidung', true);
-    const files = getAttachments(interaction);
+    const files = getFiles(interaction);
     const startedAt = Date.now();
 
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      const { channel, created } =
-        await findOrCreateUpdateChannel(interaction.guild, interaction.client);
+      const result = await findOrCreateChannel(
+        interaction.guild,
+        interaction.client
+      );
 
       await interaction.editReply(
-        progress(
-          created ? 'Đã tạo kênh, đang gửi...' : 'Đã tìm thấy kênh, đang gửi...',
-          startedAt,
-          created
+        statusText(
+          result.created
+            ? 'Đã tạo kênh, đang gửi...'
+            : 'Đã tìm thấy kênh, đang gửi...',
+          files,
+          startedAt
         )
       );
 
-      const sent = await channel.send({
+      const sent = await result.channel.send({
         content,
         files,
         allowedMentions: { parse: [] }
       });
 
       await interaction.editReply(
-        progress('Gửi thành công.', startedAt, created) +
-        `\n🖼️ Ảnh: **${files.length}/10**\n📨 Message ID: **${sent.id}**`
+        statusText(
+          'Gửi thành công.',
+          files,
+          startedAt,
+          `${result.created ? '🆕 Kênh vừa được tạo.' : '♻️ Dùng kênh đã có.'}\n📨 Message ID: **${sent.id}**`
+        )
       );
     } catch (error) {
       console.error('[THONGBAO]', error);
-
       await interaction.editReply(
-        progress('Gửi thất bại.', startedAt, false, error.message)
+        statusText('Gửi thất bại.', files, startedAt, `❌ **Lỗi:** ${error.message}`)
       );
     }
   }
