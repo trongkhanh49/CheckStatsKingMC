@@ -1,46 +1,71 @@
-/**
- * /smoker - Máy tính lợi nhuận Blaze + Bone, render HTML -> PNG.
- */
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { renderSmokerCalculator } = require('../helpers/renderHelper');
+const { renderCalculatorImage, formatNumber, formatMoney } = require('../helpers/renderHelper');
+
+const DEFAULT_BLAZE_PRICE = 150;
+const DEFAULT_BONE_PRICE = 160;
+const DEFAULT_BLAZE_PER_SPAWNER = 1;
+const DEFAULT_BONE_PER_SPAWNER = 2.589;
+const DEFAULT_COST_PER_SPAWNER = 0;
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('smoker')
-    .setDescription('Máy tính lợi nhuận qua Blaze và Bone')
-    .addIntegerOption(o => o.setName('spawners').setDescription('Số lượng Spawner').setRequired(true).setMinValue(1))
-    .addNumberOption(o => o.setName('blaze_per_spawner').setDescription('Que Blaze / Spawner').setRequired(false).setMinValue(0))
-    .addNumberOption(o => o.setName('bone_per_spawner').setDescription('Xương / Spawner').setRequired(false).setMinValue(0))
-    .addNumberOption(o => o.setName('blaze_price').setDescription('Giá bán 1 Que Blaze').setRequired(false).setMinValue(0))
-    .addNumberOption(o => o.setName('bone_price').setDescription('Giá bán 1 Xương').setRequired(false).setMinValue(0))
-    .addNumberOption(o => o.setName('cost').setDescription('Chi phí tổng').setRequired(false).setMinValue(0)),
+    .setDescription('Tính lợi nhuận Blaze + Bone theo số spawner')
+    .addIntegerOption(o => o.setName('spawners').setDescription('Số lượng spawner').setRequired(true).setMinValue(1))
+    .addNumberOption(o => o.setName('blaze_price').setDescription('Giá bán 1 Que Blaze (mặc định 150)').setMinValue(0))
+    .addNumberOption(o => o.setName('bone_price').setDescription('Giá bán 1 Xương (mặc định 160)').setMinValue(0))
+    .addNumberOption(o => o.setName('blaze_per_spawner').setDescription('Que Blaze / spawner (mặc định 1)').setMinValue(0))
+    .addNumberOption(o => o.setName('bone_per_spawner').setDescription('Xương / spawner (mặc định 2.589)').setMinValue(0))
+    .addNumberOption(o => o.setName('cost').setDescription('Chi phí / spawner (mặc định 0)').setMinValue(0)),
 
   async execute(interaction) {
+    const spawners = interaction.options.getInteger('spawners', true);
+    const blazePrice = interaction.options.getNumber('blaze_price') ?? DEFAULT_BLAZE_PRICE;
+    const bonePrice = interaction.options.getNumber('bone_price') ?? DEFAULT_BONE_PRICE;
+    const blazePerSpawner = interaction.options.getNumber('blaze_per_spawner') ?? DEFAULT_BLAZE_PER_SPAWNER;
+    const bonePerSpawner = interaction.options.getNumber('bone_per_spawner') ?? DEFAULT_BONE_PER_SPAWNER;
+    const costPerSpawner = interaction.options.getNumber('cost') ?? DEFAULT_COST_PER_SPAWNER;
+
+    const blazeQty = spawners * blazePerSpawner;
+    const boneQty = spawners * bonePerSpawner;
+    const blazeRevenue = blazeQty * blazePrice;
+    const boneRevenue = boneQty * bonePrice;
+    const revenue = blazeRevenue + boneRevenue;
+    const cost = spawners * costPerSpawner;
+    const profit = revenue - cost;
+
     await interaction.deferReply();
     try {
-      const spawners = interaction.options.getInteger('spawners', true);
-      const blazePerSpawner = interaction.options.getNumber('blaze_per_spawner') ?? Number(process.env.BLAZE_PER_SPAWNER || 1);
-      const bonePerSpawner = interaction.options.getNumber('bone_per_spawner') ?? Number(process.env.BONE_PER_SPAWNER || 1);
-      const blazePrice = interaction.options.getNumber('blaze_price') ?? Number(process.env.BLAZE_PRICE || 150);
-      const bonePrice = interaction.options.getNumber('bone_price') ?? Number(process.env.BONE_PRICE || 160);
-      const cost = interaction.options.getNumber('cost') ?? Number(process.env.SMOKER_COST || 0);
-
-      const blaze = spawners * blazePerSpawner;
-      const bone = spawners * bonePerSpawner;
-      const revenue = blaze * blazePrice + bone * bonePrice;
-      const profit = revenue - cost;
-      const totalOutput = blaze + bone;
-      const ratio = totalOutput / spawners;
-
-      const image = await renderSmokerCalculator({
-        spawners, blaze, bone, totalOutput, ratio, blazePrice, bonePrice, cost, revenue, profit,
-        title: 'Máy Tính Lợi Nhuận'
+      const image = await renderCalculatorImage({
+        title: 'Máy Tính Lợi Nhuận',
+        subtitle: 'Blaze + Bone • Tính theo số lượng spawner',
+        background: 'stats',
+        sections: [
+          { title: 'Sản Xuất', rows: [
+            { label: 'Spawner', value: formatNumber(spawners, 0), tone: 'gold' },
+            { label: 'Que Blaze', value: formatNumber(blazeQty), tone: 'gold' },
+            { label: 'Xương', value: formatNumber(boneQty), tone: 'gold' }
+          ]},
+          { title: 'Giá Thị Trường', rows: [
+            { label: 'Giá Que Blaze', value: formatMoney(blazePrice), tone: 'gold' },
+            { label: 'Giá Xương', value: formatMoney(bonePrice), tone: 'gold' },
+            { label: 'Chi phí', value: formatMoney(cost), tone: cost ? 'red' : 'green' }
+          ]},
+          { title: 'Tóm Tắt Tài Chính', rows: [
+            { label: 'Doanh Thu Blaze', value: formatMoney(blazeRevenue), tone: 'green' },
+            { label: 'Doanh Thu Xương', value: formatMoney(boneRevenue), tone: 'green' },
+            { label: 'Tổng Doanh Thu', value: formatMoney(revenue), tone: 'green' }
+          ]}
+        ],
+        resultLabel: 'Lợi Nhuận',
+        resultValue: formatMoney(profit),
+        resultTone: profit > 0 ? 'positive' : profit < 0 ? 'negative' : 'neutral'
       });
       const attachment = new AttachmentBuilder(image, { name: 'smoker.png' });
-      return interaction.editReply({ embeds: [new EmbedBuilder().setImage('attachment://smoker.png').setColor('#2b2d31')], files: [attachment] });
+      return interaction.editReply({ files: [attachment], embeds: [new EmbedBuilder().setImage('attachment://smoker.png').setColor('#2b2d31').setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })] });
     } catch (error) {
-      console.error('[Smoker] Lỗi /smoker:', error);
-      return interaction.editReply({ content: `❌ Không thể tính: ${error.message}` });
+      console.error('[Smoker] Render lỗi:', error);
+      return interaction.editReply({ embeds: [new EmbedBuilder().setTitle('Máy Tính Lợi Nhuận').setDescription(`Spawner: **${formatNumber(spawners,0)}**\nDoanh thu: **${formatMoney(revenue)}**\nChi phí: **${formatMoney(cost)}**\nLợi nhuận: **${formatMoney(profit)}**`).setColor(profit >= 0 ? '#10b981' : '#ef4444').setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })] });
     }
   }
 };

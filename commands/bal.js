@@ -102,7 +102,7 @@ module.exports = {
         )
         .setTimestamp()
         .setFooter({
-          text: 'KingX • By Kian Nguyen'
+          text: 'KingX • Thiết kế bởi ntkhanh'
         });
 
       // Chế độ IMAGE: /bal chỉ hiển thị Money trong ảnh.
@@ -118,7 +118,7 @@ module.exports = {
             .setColor('#2b2d31')
             .setTimestamp()
             .setFooter({
-              text: 'KingX • By Kian Nguyen'
+              text: 'KingX • Thiết kế bởi ntkhanh'
             });
 
           return await interaction.editReply({
@@ -161,7 +161,7 @@ module.exports = {
         .setColor('#ef4444')
         .setTimestamp()
         .setFooter({
-          text: 'KingX • By Kian Nguyen'
+          text: 'KingX • Thiết kế bởi ntkhanh'
         });
 
       const row = new ActionRowBuilder()

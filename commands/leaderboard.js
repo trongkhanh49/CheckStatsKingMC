@@ -8,7 +8,6 @@ const {
   AttachmentBuilder
 } = require('discord.js');
 const { renderLeaderboardImage } = require('../helpers/renderHelper');
-const configHelper = require('../helpers/configHelper');
 
 const LEADERBOARD_NAMES = [
   'blocks_mined',
@@ -123,13 +122,12 @@ module.exports = {
               .setDescription('⚠️ Không đọc được dữ liệu Top 1-10 từ bảng leaderboard.')
               .setColor('#ef4444')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ]
         });
       }
 
-      if (configHelper.getDisplayMode() === 'image') {
-       try {
+      try {
         const imageBuffer = await renderLeaderboardImage(leaderboard, entries);
         const attachment = new AttachmentBuilder(imageBuffer, {
           name: `leaderboard_${leaderboard}.png`
@@ -141,17 +139,12 @@ module.exports = {
               .setImage(`attachment://leaderboard_${leaderboard}.png`)
               .setColor('#2b2d31')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ],
           files: [attachment]
         });
-       } catch (renderError) {
+      } catch (renderError) {
         console.error(`[Discord-Bot] Render leaderboard thất bại: ${renderError.message}`);
-       }
-      }
-
-      {
-        console.log(`[Discord-Bot] Leaderboard đang ở TEXT mode: ${leaderboard}`);
         const lines = entries.map((entry, index) =>
           `**#${index + 1}** ${entry.player || 'Unknown'} — **${entry.value || 'N/A'}**`
         );
@@ -162,7 +155,7 @@ module.exports = {
               .setDescription(lines.join('\n'))
               .setColor('#2b2d31')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ]
         });
       }

@@ -17,7 +17,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle('📖 **HƯỚNG DẪN SỬ DỤNG BOT KINGMC** 📖')
       .setColor('#2b2d31')
-      .setThumbnail('https://mc-heads.net/head/BinhLH/3d')
+      .setThumbnail('https://mc-heads.net/head/Steve/3d')
       .setDescription(
         `Chào mừng bạn đến với **KingX**!\n` +
         `Bạn có thể sử dụng các lệnh bằng **Slash Command (\`/\`)** hoặc **Tiền tố (\`?\`)** trực tiếp trong kênh chat.`
@@ -42,16 +42,11 @@ module.exports = {
             `• \`/leaderboard <query>\`\n` +
             `  └ *Xem Top 1–10 leaderboard KingMC.*\n` +
             `• \`/bounty check\`\n` +
-            `  └ *Xem Top 1–10 bounty KingMC.*`,
-          inline: false
-        },
-        {
-          name: '🧮 **LỆNH TÍNH TOÁN**',
-          value:
-            `• \/calc spawners <số lượng>\n` +
-            `  └ *Tính sản lượng và lợi nhuận Xương.*\n` +
-            `• \/smoker <spawner>\n` +
-            `  └ *Tính lợi nhuận qua Que Blaze + Xương.*`,
+            `  └ *Xem Top 1–10 bounty KingMC.*\n` +
+            `• \`/calc spawners <amount>\`\n` +
+            `  └ *Tính sản lượng Xương từ số lượng spawner.*\n` +
+            `• \`/smoker <spawners>\`\n` +
+            `  └ *Tính doanh thu và lợi nhuận Blaze + Bone.*`,
           inline: false
         },
         {
@@ -69,12 +64,12 @@ module.exports = {
           name: '💡 **MẸO SỬ DỤNG**',
           value: 
             `• Bạn có thể bấm trực tiếp nút **Báo lỗi** dưới các kết quả nếu gặp sự cố.\n` +
-            `• Sử dụng cú pháp ví dụ: \`?stats BinhLH\` hoặc \`?ah kiem\``,
+            `• Sử dụng cú pháp ví dụ: \`?stats Steve\` hoặc \`?ah kiem\``,
           inline: false
         }
       )
       .setTimestamp()
-      .setFooter({ text: 'KingX • By Kian Nguyen' });
+      .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
 
     if (interaction.editReply) {
       await interaction.editReply({ embeds: [embed] });

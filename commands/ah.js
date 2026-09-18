@@ -38,7 +38,7 @@ module.exports = {
           .setDescription(`⚠️ Không có vật phẩm nào trên AH cho **${itemDisplayName}**.`)
           .setColor('#ef4444')
           .setTimestamp()
-          .setFooter({ text: 'KingX • By Kian Nguyen' });
+          .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
 
         return await interaction.editReply({ embeds: [emptyEmbed] });
       }
@@ -55,7 +55,7 @@ module.exports = {
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
             imageBuffer = await renderTableImage(
-              `Top 10 Cheapest Auctions for “${itemQuery}”`,
+              `DANH SÁCH AH: ${itemQuery.toUpperCase()}`,
               itemQuery,
               items,
               'ah'
@@ -74,7 +74,7 @@ module.exports = {
             .setImage('attachment://ah_table.png')
             .setColor('#2b2d31')
             .setTimestamp()
-            .setFooter({ text: 'KingX • By Kian' });
+            .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
 
           return await interaction.editReply({ embeds: [embed], files: [attachment] });
         }
@@ -86,7 +86,7 @@ module.exports = {
         .setTitle(`📦 Danh sách AH: **${itemQuery.toUpperCase()}** ${emoji}`)
         .setColor('#2b2d31')
         .setTimestamp()
-        .setFooter({ text: 'KingX • By Kian' });
+        .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
 
       const formattedLines = items.map((item, index) => {
         const priceText = item.price || 'N/A';
@@ -117,7 +117,7 @@ module.exports = {
         .setDescription(`Không thể lấy danh sách AH cho **${itemQuery}**.\n\n⚠️ Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
         .setTimestamp()
-        .setFooter({ text: 'KingX • By Kian Nguyen' });
+        .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
         
       const row = new ActionRowBuilder()
         .addComponents(

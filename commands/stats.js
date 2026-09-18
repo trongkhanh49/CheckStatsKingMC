@@ -135,7 +135,7 @@ module.exports = {
         )
         .setTimestamp()
         .setFooter({
-          text: 'KingX • By Kian Nguyen'
+          text: 'KingX • Thiết kế bởi ntkhanh'
         });
 
       const validItems = (result.items || [])
@@ -238,7 +238,7 @@ module.exports = {
             .setColor('#2b2d31')
             .setTimestamp()
             .setFooter({
-              text: 'KingX • By Kian Nguyen'
+              text: 'KingX • Thiết kế bởi ntkhanh'
             });
 
           return await interaction.editReply({
@@ -281,7 +281,7 @@ module.exports = {
         .setColor('#ef4444')
         .setTimestamp()
         .setFooter({
-          text: 'KingX • By Kian Nguyen'
+          text: 'KingX • Thiết kế bởi ntkhanh'
         });
 
       const row = new ActionRowBuilder()

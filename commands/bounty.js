@@ -3,7 +3,6 @@
  */
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { renderBountyImage } = require('../helpers/renderHelper');
-const configHelper = require('../helpers/configHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -37,13 +36,12 @@ module.exports = {
               .setDescription('⚠️ Không đọc được Top 1-10 bounty từ server.')
               .setColor('#ef4444')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ]
         });
       }
 
-      if (configHelper.getDisplayMode() === 'image') {
-       try {
+      try {
         const imageBuffer = await renderBountyImage(entries);
         const attachment = new AttachmentBuilder(imageBuffer, { name: 'bounty.png' });
 
@@ -53,17 +51,12 @@ module.exports = {
               .setImage('attachment://bounty.png')
               .setColor('#2b2d31')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ],
           files: [attachment]
         });
-       } catch (renderError) {
+      } catch (renderError) {
         console.error(`[Discord-Bot] Render bounty thất bại: ${renderError.message}`);
-       }
-      }
-
-      {
-        console.log('[Discord-Bot] Bounty đang ở TEXT mode');
         const lines = entries.map((entry, index) =>
           `**#${index + 1}** ${entry.player || 'Unknown'} — **${entry.value || 'N/A'}**`
         );
@@ -74,7 +67,7 @@ module.exports = {
               .setDescription(lines.join('\n'))
               .setColor('#2b2d31')
               .setTimestamp()
-              .setFooter({ text: 'KingX • By Kian Nguyen' })
+              .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' })
           ]
         });
       }

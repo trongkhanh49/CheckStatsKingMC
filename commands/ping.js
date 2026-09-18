@@ -69,7 +69,7 @@ module.exports = {
       .setColor('#2b2d31')
       .setDescription(`\`\`\`text\n${lines}\n\`\`\``)
       .setTimestamp()
-      .setFooter({ text: 'KingX • By Kian Nguyen' });
+      .setFooter({ text: 'KingX • Thiết kế bởi ntkhanh' });
 
     if (interaction.editReply) {
       await interaction.editReply({ embeds: [embed] });
