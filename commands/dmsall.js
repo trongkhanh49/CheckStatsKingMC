@@ -1,27 +1,26 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 const OWNER_ID = (process.env.ADMIN_ID || process.env.OWNER_ID || '').trim();
-const UPDATE_MS = 1500;
+const PROGRESS_UPDATE_MS = 1500;
 const SEND_DELAY_MS = 250;
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function render(done, total, success, failed, skipped, startedAt, finished = false) {
-  const pct = total ? Math.floor(done / total * 100) : 100;
+function buildProgress(done, total, success, failed, startedAt, finished = false) {
+  const percent = total ? Math.floor((done / total) * 100) : 100;
   const width = 20;
-  const filled = Math.round(pct / 100 * width);
+  const filled = Math.round((percent / 100) * width);
   const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
   const elapsed = Math.floor((Date.now() - startedAt) / 1000);
 
   return [
     finished ? '📨 **DMSALL — HOÀN TẤT**' : '📨 **DMSALL — ĐANG GỬI**',
     '',
-    `**Tiến trình:** ${done.toLocaleString()} / ${total.toLocaleString()} (${pct}%)`,
+    `**Tiến trình:** ${done.toLocaleString()} / ${total.toLocaleString()} (${percent}%)`,
     bar,
     '',
     `✅ Thành công: **${success.toLocaleString()}**`,
     `❌ Thất bại: **${failed.toLocaleString()}**`,
-    `⏭️ Bỏ qua: **${skipped.toLocaleString()}**`,
     `⏱️ Thời gian: **${elapsed}s**`
   ].join('\n');
 }
@@ -35,8 +34,8 @@ async function collectUsers(client) {
       for (const member of members.values()) {
         if (!member.user.bot) users.set(member.id, member.user);
       }
-    } catch (err) {
-      console.error(`[DMSALL] fetch ${guild.id}:`, err.message);
+    } catch (error) {
+      console.error(`[DMSALL] Không thể lấy member ${guild.id}:`, error.message);
     }
   }
 
@@ -47,7 +46,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('dmsall')
     .setDescription('Gửi DM tới member trong tất cả server của bot.')
-    .addStringOption(o => o.setName('noidung').setDescription('Nội dung').setRequired(true).setMaxLength(2000))
+    .addStringOption(o =>
+      o.setName('noidung')
+        .setDescription('Nội dung tin nhắn')
+        .setRequired(true)
+        .setMaxLength(2000)
+    )
     .addAttachmentOption(o => o.setName('anh1').setDescription('Ảnh 1'))
     .addAttachmentOption(o => o.setName('anh2').setDescription('Ảnh 2'))
     .addAttachmentOption(o => o.setName('anh3').setDescription('Ảnh 3'))
@@ -60,50 +64,75 @@ module.exports = {
     .addAttachmentOption(o => o.setName('anh10').setDescription('Ảnh 10')),
 
   async execute(interaction) {
+    // Hard owner check: only the configured bot owner can run this command.
     if (!OWNER_ID || interaction.user.id !== OWNER_ID) {
-      return interaction.reply({ content: '❌ Chỉ chủ bot mới có thể sử dụng /dmsall.', ephemeral: true });
+      return interaction.reply({
+        content: '❌ Chỉ chủ bot mới có thể sử dụng /dmsall.',
+        ephemeral: true
+      });
     }
 
     const content = interaction.options.getString('noidung', true);
     const files = [];
+
     for (let i = 1; i <= 10; i++) {
-      const a = interaction.options.getAttachment(`anh${i}`);
-      if (a) files.push(a.url);
+      const attachment = interaction.options.getAttachment(`anh${i}`);
+      if (attachment) files.push(attachment.url);
     }
 
     await interaction.deferReply({ ephemeral: true });
 
     const users = await collectUsers(interaction.client);
     const total = users.length;
-    if (!total) return interaction.editReply('⚠️ Không tìm thấy member nào.');
 
-    let done = 0, success = 0, failed = 0, skipped = 0;
+    if (!total) {
+      return interaction.editReply('⚠️ Không tìm thấy member nào để gửi.');
+    }
+
+    let done = 0;
+    let success = 0;
+    let failed = 0;
     const startedAt = Date.now();
     let lastUpdate = 0;
 
-    const update = async (force = false) => {
-      if (!force && Date.now() - lastUpdate < UPDATE_MS) return;
+    const updateProgress = async (force = false) => {
+      if (!force && Date.now() - lastUpdate < PROGRESS_UPDATE_MS) return;
       lastUpdate = Date.now();
+
       try {
-        await interaction.editReply(render(done, total, success, failed, skipped, startedAt));
-      } catch {}
+        await interaction.editReply(
+          buildProgress(done, total, success, failed, startedAt)
+        );
+      } catch (error) {
+        console.error('[DMSALL] Cập nhật tiến trình thất bại:', error.message);
+      }
     };
 
-    await update(true);
+    await updateProgress(true);
 
     for (const user of users) {
       try {
-        await user.send({ content, files });
+        await user.send({
+          content,
+          files,
+          allowedMentions: { parse: [] }
+        });
         success++;
-      } catch (err) {
+      } catch (error) {
         failed++;
-        console.error(`[DMSALL] ${user.id}:`, err.code || err.message);
+        console.error(
+          `[DMSALL] Không gửi được DM tới ${user.id}:`,
+          error.code || error.message
+        );
       }
+
       done++;
-      await update();
+      await updateProgress();
       await sleep(SEND_DELAY_MS);
     }
 
-    await interaction.editReply(render(done, total, success, failed, skipped, startedAt, true));
+    await interaction.editReply(
+      buildProgress(done, total, success, failed, startedAt, true)
+    );
   }
 };
