@@ -626,12 +626,65 @@ function isDecorationItemForRender(item) {
   return false;
 }
 
+const LEADERBOARD_TEMPLATE_PATH = path.join(__dirname, '../templates/leaderboardCard.html');
+
+async function renderLeaderboardImage(name, entries = []) {
+  const template = fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8');
+  const rows = entries.slice(0, 10).map((entry, index) => {
+    const player = escapeHtml(entry.player || 'Unknown');
+    const value = escapeHtml(entry.value || 'N/A');
+    const avatar = `https://mc-heads.net/avatar/${encodeURIComponent(entry.player || 'Steve')}/64`;
+    return `
+      <div class="lb-row">
+        <div class="rank">#${index + 1}</div>
+        <img class="avatar" src="${avatar}" onerror="this.onerror=null;this.src='https://mc-heads.net/avatar/Steve/64';" alt="">
+        <div class="player">${player}</div>
+        <div class="value">${value}</div>
+      </div>`;
+  }).join('');
+
+  const html = template
+    .replace('{{TITLE}}', escapeHtml(name))
+    .replace('{{ROWS}}', rows || '<div class="empty">Không có dữ liệu</div>');
+
+  return renderHtmlElement(html, '.leaderboard-card', {
+    width: 1000,
+    height: 760
+  });
+}
+
+async function renderBountyImage(entries = []) {
+  const template = fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8');
+  const rows = entries.slice(0, 10).map((entry, index) => {
+    const player = escapeHtml(entry.player || 'Unknown');
+    const value = escapeHtml(entry.value || 'N/A');
+    const avatar = `https://mc-heads.net/avatar/${encodeURIComponent(entry.player || 'Steve')}/64`;
+    return `
+      <div class="lb-row">
+        <div class="rank">#${index + 1}</div>
+        <img class="avatar" src="${avatar}" onerror="this.onerror=null;this.src='https://mc-heads.net/avatar/Steve/64';" alt="">
+        <div class="player">${player}</div>
+        <div class="value">${value}</div>
+      </div>`;
+  }).join('');
+
+  const html = template
+    .replace('{{TITLE}}', 'BOUNTY')
+    .replace('{{ROWS}}', rows || '<div class="empty">Không có dữ liệu</div>');
+
+  return renderHtmlElement(html, '.leaderboard-card', {
+    width: 1000,
+    height: 760
+  });
+}
+
 module.exports = {
   renderTableImage,
   formatItemDisplayName,
   getItemIconUrl,
   formatMinecraftTextToHtml,
   renderStatsImage,
-  renderBalanceImage
+  renderBalanceImage,
+  renderLeaderboardImage,
+  renderBountyImage
 };
-
