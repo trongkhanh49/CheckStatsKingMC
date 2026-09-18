@@ -46,6 +46,15 @@ module.exports = {
           inline: false
         },
         {
+          name: '🧮 **LỆNH TÍNH TOÁN**',
+          value:
+            `• \/calc spawners <số lượng>\n` +
+            `  └ *Tính sản lượng và lợi nhuận Xương.*\n` +
+            `• \/smoker <spawner>\n` +
+            `  └ *Tính lợi nhuận qua Que Blaze + Xương.*`,
+          inline: false
+        },
+        {
           name: '🌐 **LỆNH HỆ THỐNG & TRẠNG THÁI**',
           value: 
             `• \`?online [cụm server]\` hoặc \`/online [cụm]\`\n` +

@@ -3,6 +3,7 @@
  */
 const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { renderBountyImage } = require('../helpers/renderHelper');
+const configHelper = require('../helpers/configHelper');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -41,7 +42,8 @@ module.exports = {
         });
       }
 
-      try {
+      if (configHelper.getDisplayMode() === 'image') {
+       try {
         const imageBuffer = await renderBountyImage(entries);
         const attachment = new AttachmentBuilder(imageBuffer, { name: 'bounty.png' });
 
@@ -55,8 +57,13 @@ module.exports = {
           ],
           files: [attachment]
         });
-      } catch (renderError) {
+       } catch (renderError) {
         console.error(`[Discord-Bot] Render bounty thất bại: ${renderError.message}`);
+       }
+      }
+
+      {
+        console.log('[Discord-Bot] Bounty đang ở TEXT mode');
         const lines = entries.map((entry, index) =>
           `**#${index + 1}** ${entry.player || 'Unknown'} — **${entry.value || 'N/A'}**`
         );

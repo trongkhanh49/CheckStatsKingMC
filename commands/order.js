@@ -55,7 +55,7 @@ module.exports = {
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
             imageBuffer = await renderTableImage(
-              `DANH SÁCH ORDER: ${itemQuery.toUpperCase()}`,
+              `Top 10 Orders for “${itemQuery}”`,
               itemQuery,
               orders,
               'order'
