@@ -38,7 +38,11 @@ module.exports = {
             `• \`?ah [tên vật phẩm]\` hoặc \`/ah [tên]\`\n` +
             `  └ *Tra cứu vật phẩm đang rao bán trên Chợ Đen (AH).*\n` +
             `• \`?order [tên vật phẩm]\` hoặc \`/order [tên]\`\n` +
-            `  └ *Tra cứu các đơn đặt hàng thị trường.*`,
+            `  └ *Tra cứu các đơn đặt hàng thị trường.*\n` +
+            `• \`/leaderboard <query>\`\n` +
+            `  └ *Xem Top 1–10 leaderboard KingMC.*\n` +
+            `• \`/bounty check\`\n` +
+            `  └ *Xem Top 1–10 bounty KingMC.*`,
           inline: false
         },
         {
