@@ -97,6 +97,17 @@ class CommandHandler {
 
   // Xử lý sự kiện Interaction
   async handleInteraction(interaction) {
+    if (interaction.isAutocomplete()) {
+      const command = this.client.commands.get(interaction.commandName);
+      if (!command || typeof command.autocomplete !== 'function') return;
+      try {
+        await command.autocomplete(interaction);
+      } catch (error) {
+        console.error(`[CommandHandler] Lỗi autocomplete /${interaction.commandName}:`, error);
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = this.client.commands.get(interaction.commandName);
