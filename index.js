@@ -271,6 +271,10 @@ const server = http.createServer((req, res) => {
           result = await localMcBot.getAh(player, timeoutMs || 15000);
         } else if (action === 'online') {
           result = await localMcBot.getOnline(player, timeoutMs || 15000);
+        } else if (action === 'leaderboard') {
+          result = await localMcBot.getLeaderboard(player, timeoutMs || 20000);
+        } else if (action === 'bounty') {
+          result = await localMcBot.getBounty(timeoutMs || 20000);
         } else {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ success: false, error: 'Hành động không hợp lệ' }));

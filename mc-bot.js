@@ -212,6 +212,134 @@ function generateRandomUsername(length = 12) {
   return result;
 }
 
+// Parse a ranked line such as "#1 Player - $1,000", "1. Player 123", etc.
+function parseRankedTextLine(text) {
+  const clean = cleanMinecraftText(text || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return null;
+
+  const rankMatch = clean.match(/(?:^|\s)#?(\d{1,2})[.)\-:\s]+(.+)/);
+  if (!rankMatch) return null;
+
+  const rank = Number(rankMatch[1]);
+  if (rank < 1 || rank > 10) return null;
+
+  let rest = rankMatch[2].trim();
+  // Prefer a money/number token at the end for the value.
+  const valueMatch = rest.match(/(?:^|\s)(\$?\s*[-+]?\d[\d,.]*(?:[KMBTQ]|\s*(?:k|m|b|t|tr|tri))?)\s*$/i);
+  if (!valueMatch) return null;
+
+  const value = valueMatch[1].trim();
+  let player = rest.slice(0, valueMatch.index).trim();
+  player = player.replace(/^[|:\-\s]+|[|:\-\s]+$/g, '').trim();
+  player = player.replace(/(?:\s+[-|:]\s*)$/, '').trim();
+
+  if (!player || player.length > 40) return null;
+  return { rank, player, value };
+}
+
+function extractRankedEntriesFromWindow(window) {
+  const candidates = [];
+
+  const maxSlots = Math.min(window.inventoryStart || window.slots.length, window.slots.length);
+  for (let i = 0; i < maxSlots; i++) {
+    const item = window.slots[i];
+    if (!item) continue;
+
+    let displayName = item.displayName || '';
+    if (item.customName) displayName = item.customName;
+    displayName = parseMinecraftJSON(displayName);
+
+    const lore = item.customLore
+      ? item.customLore.map(l => parseMinecraftJSON(l))
+      : extractLoreFromNbt(item.nbt);
+
+    const lines = [displayName, ...lore]
+      .map(v => cleanMinecraftText(v))
+      .filter(Boolean);
+
+    let rank = null;
+    for (const line of lines) {
+      const rm = line.match(/(?:^|\s)#?(\d{1,2})[.)\-:\s]+/);
+      if (rm) {
+        const n = Number(rm[1]);
+        if (n >= 1 && n <= 10) {
+          rank = n;
+          break;
+        }
+      }
+    }
+
+    let player = '';
+    // Player heads commonly expose the player name as the display name.
+    if (displayName) {
+      player = cleanMinecraftText(displayName)
+        .replace(/^(?:#?\d{1,2}[.)\-:\s]+|rank\s*\d+\s*)/i, '')
+        .trim();
+    }
+
+    // Find a line explicitly naming the player.
+    for (const line of lines) {
+      const m = line.match(/(?:player|người chơi|nguoi choi|name|ten)\s*[:\-]\s*(.+)/i);
+      if (m && m[1].trim()) {
+        player = m[1].trim();
+        break;
+      }
+    }
+
+    let value = '';
+    for (const line of lines) {
+      const vm = line.match(/(?:value|score|điểm|diem|tiền|tien|money|amount|giá trị|gia tri|bounty|shard|kills?|blocks?|played)\s*[:\-]\s*(.+)/i);
+      if (vm && vm[1].trim()) {
+        value = vm[1].trim();
+        break;
+      }
+      const genericValue = line.match(/(?:^|\s)(\$?\s*[-+]?\d[\d,.]*(?:[KMBTQ]|\s*(?:k|m|b|t|tr|tri))?)\s*$/i);
+      if (genericValue && genericValue[1].trim() !== player) {
+        value = genericValue[1].trim();
+      }
+    }
+
+    // If the server only exposes rank/value in lore, use the last numeric-looking line.
+    if (!value) {
+      for (const line of [...lines].reverse()) {
+        const genericValue = line.match(/(?:^|\s)(\$?\s*[-+]?\d[\d,.]*(?:[KMBTQ]|\s*(?:k|m|b|t|tr|tri))?)\s*$/i);
+        if (genericValue) {
+          value = genericValue[1].trim();
+          break;
+        }
+      }
+    }
+
+    if (!rank) rank = i + 1;
+    if (rank >= 1 && rank <= 10 && player && value) {
+      // Strip rank prefixes and common GUI labels.
+      player = player.replace(/^(?:#?\d{1,2}[.)\-:\s]+|top\s*\d{1,2}\s*)/i, '').trim();
+      if (player && !/^(?:leaderboard|top|bounty|value|score|rank)$/i.test(player)) {
+        candidates.push({ rank, player, value, slot: i });
+      }
+    }
+  }
+
+  const unique = new Map();
+  for (const entry of candidates) {
+    if (!unique.has(entry.rank)) unique.set(entry.rank, entry);
+  }
+  return [...unique.values()].sort((a, b) => a.rank - b.rank).slice(0, 10);
+}
+
+function parseRankedChatLines(text) {
+  const results = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const parsed = parseRankedTextLine(line);
+    if (parsed) results.push(parsed);
+  }
+  const unique = new Map();
+  for (const entry of results) {
+    if (!unique.has(entry.rank)) unique.set(entry.rank, entry);
+  }
+  return [...unique.values()].sort((a, b) => a.rank - b.rank).slice(0, 10);
+}
+
 class PersistentBot extends EventEmitter {
   constructor(credentials, hosts, port) {
     super();
@@ -424,6 +552,28 @@ class PersistentBot extends EventEmitter {
       if (!this.targetPlayer) return;
 
       console.log(`[MC-Bot] GUI Mở: "${title}" (Action: ${this.currentAction}), Đang trích xuất dữ liệu...`);
+
+
+      if (this.currentAction === 'leaderboard' || this.currentAction === 'bounty') {
+        const entries = extractRankedEntriesFromWindow(window);
+        const actionName = this.currentAction;
+        console.log(`[MC-Bot] Đã parse ${entries.length}/10 entries cho ${actionName}.`);
+
+        if (entries.length > 0 && this.statsPromiseResolve) {
+          this.statsPromiseResolve({
+            success: true,
+            serverUsed: `${this.hosts[this.currentHostIndex]}:${this.port}`,
+            title,
+            entries
+          });
+
+          if (this.bot && this.isBotOnline) {
+            this.bot.closeWindow(window);
+          }
+          this.cleanupStatsState();
+        }
+        return;
+      }
 
       if (this.currentAction === 'online') {
         let foundHeadItem = null;
@@ -1018,6 +1168,108 @@ class PersistentBot extends EventEmitter {
       this.statsTimeout = setTimeout(() => {
         if (this.statsPromiseReject) {
           this.statsPromiseReject(new Error('Timeout! Không mở được bảng Chợ Đấu Giá (AH) sau ' + (timeoutMs/1000) + ' giây.'));
+          this.cleanupStatsState();
+        }
+      }, timeoutMs);
+    });
+  }
+
+
+  getLeaderboard(name, timeoutMs = 20000) {
+    return new Promise((resolve, reject) => {
+      if (!this.bot || !this.isBotOnline || !this.isReady) {
+        return reject(new Error('Bot Minecraft chưa sẵn sàng nhận lệnh.'));
+      }
+      if (this.targetPlayer) {
+        return reject(new Error('Bot đang trong quá trình xử lý một yêu cầu khác.'));
+      }
+
+      this.targetPlayer = name;
+      this.currentAction = 'leaderboard';
+      this.statsPromiseResolve = resolve;
+      this.statsPromiseReject = reject;
+
+      const chatEntries = new Map();
+      const chatListener = (message) => {
+        if (this.currentAction !== 'leaderboard') return;
+        for (const entry of parseRankedChatLines(message)) chatEntries.set(entry.rank, entry);
+        const entries = [...chatEntries.values()].sort((a, b) => a.rank - b.rank).slice(0, 10);
+        if (entries.length >= 10) {
+          cleanupChat();
+          clearTimeout(this.statsTimeout);
+          this.statsTimeout = null;
+          this.statsPromiseResolve?.({
+            success: true,
+            serverUsed: `${this.hosts[this.currentHostIndex]}:${this.port}`,
+            title: `Leaderboard ${name}`,
+            entries
+          });
+          this.cleanupStatsState();
+        }
+      };
+      const cleanupChat = () => {
+        if (this.bot) this.bot.removeListener('messagestr', chatListener);
+      };
+
+      this.bot.on('messagestr', chatListener);
+      console.log(`[MC-Bot] Yêu cầu leaderboard: /leaderboard ${name}`);
+      this.bot.chat(`/leaderboard ${name}`);
+
+      this.statsTimeout = setTimeout(() => {
+        cleanupChat();
+        if (this.statsPromiseReject) {
+          this.statsPromiseReject(new Error(`Timeout! Không nhận được leaderboard ${name} sau ${timeoutMs / 1000} giây.`));
+          this.cleanupStatsState();
+        }
+      }, timeoutMs);
+    });
+  }
+
+  getBounty(timeoutMs = 20000) {
+    return new Promise((resolve, reject) => {
+      if (!this.bot || !this.isBotOnline || !this.isReady) {
+        return reject(new Error('Bot Minecraft chưa sẵn sàng nhận lệnh.'));
+      }
+      if (this.targetPlayer) {
+        return reject(new Error('Bot đang trong quá trình xử lý một yêu cầu khác.'));
+      }
+
+      this.targetPlayer = 'bounty';
+      this.currentAction = 'bounty';
+      this.statsPromiseResolve = resolve;
+      this.statsPromiseReject = reject;
+
+      const chatEntries = new Map();
+      const chatListener = (message) => {
+        if (this.currentAction !== 'bounty') return;
+        for (const entry of parseRankedChatLines(message)) chatEntries.set(entry.rank, entry);
+        const entries = [...chatEntries.values()].sort((a, b) => a.rank - b.rank).slice(0, 10);
+        if (entries.length >= 10) {
+          cleanupChat();
+          clearTimeout(this.statsTimeout);
+          this.statsTimeout = null;
+          this.statsPromiseResolve?.({
+            success: true,
+            serverUsed: `${this.hosts[this.currentHostIndex]}:${this.port}`,
+            title: 'Bounty',
+            entries
+          });
+          this.cleanupStatsState();
+        }
+      };
+      const cleanupChat = () => {
+        if (this.bot) this.bot.removeListener('messagestr', chatListener);
+      };
+
+      this.bot.on('messagestr', chatListener);
+      console.log('[MC-Bot] Yêu cầu bounty: /bounty');
+      // Discord /bounty check MUST map to Minecraft /bounty.
+      this.bot.chat('/bounty');
+
+      this.statsTimeout = setTimeout(() => {
+        cleanupChat();
+        if (this.statsPromiseReject) {
+          this.statsPromiseReject(new Error(`Timeout! Không nhận được bảng bounty sau ${timeoutMs / 1000} giây.`));
           this.cleanupStatsState();
         }
       }, timeoutMs);

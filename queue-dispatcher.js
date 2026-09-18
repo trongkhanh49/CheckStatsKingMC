@@ -83,6 +83,10 @@ class QueueDispatcher {
           result = await this.localBot.getAh(task.player, task.timeoutMs);
         } else if (task.action === 'online') {
           result = await this.localBot.getOnline(task.player, task.timeoutMs);
+        } else if (task.action === 'leaderboard') {
+          result = await this.localBot.getLeaderboard(task.player, task.timeoutMs);
+        } else if (task.action === 'bounty') {
+          result = await this.localBot.getBounty(task.timeoutMs);
         }
       } else {
         result = await this.executeRemoteWorker(availableWorker.url, task.action, task.player, task.timeoutMs);
