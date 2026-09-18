@@ -393,7 +393,7 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
       const argStr = args.join(' ').trim();
       const noArgRequiredCommands = ['ping', 'help'];
       if (!noArgRequiredCommands.includes(commandName) && !argStr) {
-         return message.channel.send(`⚠️ Lệnh \`?${commandName}\` cần có tham số (tên người chơi hoặc vật phẩm). VD: \`?${commandName} BinhLH\``);
+         return message.channel.send(`⚠️ Lệnh \`?${commandName}\` cần có tham số (tên người chơi hoặc vật phẩm). VD: \`?${commandName} Steve\``);
       }
 
       const userId = message.author.id;
