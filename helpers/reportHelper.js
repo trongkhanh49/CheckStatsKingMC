@@ -41,7 +41,7 @@ async function sendBanAlert(client, username, reason) {
           { name: '📝 Lý do / Nội dung từ Server', value: `\`\`\`${reason || 'Không rõ lý do'}\`\`\`` }
         )
         .setTimestamp()
-        .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+        .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi ntkhanh' });
 
       await admin.send({ embeds: [banEmbed] });
       console.log(`[ReportHelper] Đã gửi thông báo Cảnh báo BAN tới Admin (${ADMIN_ID}).`);
@@ -117,7 +117,7 @@ async function handleReportButtons(interaction, client) {
             { name: '🚨 Full Chi tiết Lỗi (Admin Debug)', value: `\`\`\`${errorDetail}\`\`\`` }
           )
           .setTimestamp()
-          .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi BinhLH' });
+          .setFooter({ text: 'KingMC.vn Stats Bot • Thiết kế bởi ntkhanh' });
 
         await admin.send({ embeds: [reportEmbed] });
         

@@ -392,7 +392,7 @@ async function renderTableImage(title, itemQuery, items, type = 'order') {
     `;
   }).join('\n');
 
-  const compiledHtml = templateContent
+  const compiledHtml = injectBackground(templateContent, BACKGROUND_MARKET_PATH)
     .replace('{{TITLE}}', title)
     .replace('{{ROWS}}', rowsHtml);
 
@@ -443,6 +443,28 @@ async function renderTableImage(title, itemQuery, items, type = 'order') {
 
 const STATS_TEMPLATE_PATH = path.join(__dirname, '../templates/statsTable.html');
 const BALANCE_TEMPLATE_PATH = path.join(__dirname, '../templates/balanceCard.html');
+const CALCULATOR_TEMPLATE_PATH = path.join(__dirname, '../templates/calculatorCard.html');
+const BACKGROUND_STATS_PATH = path.join(__dirname, '../assets/background_stats.png');
+const BACKGROUND_MARKET_PATH = path.join(__dirname, '../assets/background_market.png');
+
+const backgroundCache = new Map();
+function getBackgroundDataUri(filePath) {
+  if (backgroundCache.has(filePath)) return backgroundCache.get(filePath);
+  try {
+    const ext = path.extname(filePath).toLowerCase() === '.jpg' ? 'jpeg' : 'png';
+    const data = fs.readFileSync(filePath).toString('base64');
+    const uri = `data:image/${ext};base64,${data}`;
+    backgroundCache.set(filePath, uri);
+    return uri;
+  } catch (err) {
+    console.error(`[RenderHelper] Không thể đọc background ${filePath}:`, err.message);
+    return '';
+  }
+}
+
+function injectBackground(template, filePath) {
+  return template.replace(/\{\{BACKGROUND\}\}/g, getBackgroundDataUri(filePath));
+}
 
 function filterStatLore(lines) {
   return (lines || [])
@@ -513,7 +535,7 @@ function defaultProfileRows(player, status) {
 }
 
 async function renderStatsImage(player, items = []) {
-  let templateContent = fs.readFileSync(STATS_TEMPLATE_PATH, 'utf8');
+  let templateContent = injectBackground(fs.readFileSync(STATS_TEMPLATE_PATH, 'utf8'), BACKGROUND_STATS_PATH);
 
   const validItems = (items || []).filter(item => !isDecorationItemForRender(item));
   const groups = { profile: [], economy: [], play: [], combat: [] };
@@ -555,7 +577,7 @@ async function renderStatsImage(player, items = []) {
 }
 
 async function renderBalanceImage(player, money) {
-  let templateContent = fs.readFileSync(BALANCE_TEMPLATE_PATH, 'utf8');
+  let templateContent = injectBackground(fs.readFileSync(BALANCE_TEMPLATE_PATH, 'utf8'), BACKGROUND_STATS_PATH);
   const avatar = `https://mc-heads.net/avatar/${encodeURIComponent(player)}/128`;
   const fallbackAvatar = `https://mc-heads.net/avatar/Steve/128`;
 
@@ -629,7 +651,7 @@ function isDecorationItemForRender(item) {
 const LEADERBOARD_TEMPLATE_PATH = path.join(__dirname, '../templates/leaderboardCard.html');
 
 async function renderLeaderboardImage(name, entries = []) {
-  const template = fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8');
+  const template = injectBackground(fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8'), BACKGROUND_STATS_PATH);
   const rows = entries.slice(0, 10).map((entry, index) => {
     const player = escapeHtml(entry.player || 'Unknown');
     const value = escapeHtml(entry.value || 'N/A');
@@ -654,7 +676,7 @@ async function renderLeaderboardImage(name, entries = []) {
 }
 
 async function renderBountyImage(entries = []) {
-  const template = fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8');
+  const template = injectBackground(fs.readFileSync(LEADERBOARD_TEMPLATE_PATH, 'utf8'), BACKGROUND_STATS_PATH);
   const rows = entries.slice(0, 10).map((entry, index) => {
     const player = escapeHtml(entry.player || 'Unknown');
     const value = escapeHtml(entry.value || 'N/A');
@@ -678,6 +700,53 @@ async function renderBountyImage(entries = []) {
   });
 }
 
+
+function formatNumber(value, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(Number(value) || 0);
+}
+
+function formatMoney(value) {
+  const n = Number(value) || 0;
+  return `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(n))}`;
+}
+
+async function renderCalculatorImage({
+  title,
+  subtitle,
+  background = 'stats',
+  accent = 'green',
+  sections = [],
+  resultLabel = 'Lợi nhuận',
+  resultValue = 0,
+  resultTone = 'positive'
+}) {
+  let template = fs.readFileSync(CALCULATOR_TEMPLATE_PATH, 'utf8');
+  template = injectBackground(template, background === 'market' ? BACKGROUND_MARKET_PATH : BACKGROUND_STATS_PATH);
+
+  const sectionsHtml = sections.map(section => `
+    <section class="calc-section">
+      <h2>${escapeHtml(section.title || '')}</h2>
+      <div class="calc-grid">
+        ${(section.rows || []).map(row => `
+          <div class="calc-row">
+            <div class="calc-label">${escapeHtml(row.label || '')}</div>
+            <div class="calc-value ${row.tone ? `tone-${escapeHtml(row.tone)}` : ''}">${escapeHtml(String(row.value ?? '—'))}</div>
+          </div>`).join('')}
+      </div>
+    </section>`).join('');
+
+  const html = template
+    .replace('{{TITLE}}', escapeHtml(title))
+    .replace('{{SUBTITLE}}', escapeHtml(subtitle || 'KingMC'))
+    .replace('{{ACCENT}}', escapeHtml(accent))
+    .replace('{{SECTIONS}}', sectionsHtml)
+    .replace('{{RESULT_LABEL}}', escapeHtml(resultLabel))
+    .replace('{{RESULT_VALUE}}', escapeHtml(String(resultValue)))
+    .replace('{{RESULT_TONE}}', escapeHtml(resultTone));
+
+  return renderHtmlElement(html, '.calculator-card', { width: 1080, height: 820 });
+}
+
 module.exports = {
   renderTableImage,
   formatItemDisplayName,
@@ -686,5 +755,8 @@ module.exports = {
   renderStatsImage,
   renderBalanceImage,
   renderLeaderboardImage,
-  renderBountyImage
+  renderBountyImage,
+  renderCalculatorImage,
+  formatNumber,
+  formatMoney
 };

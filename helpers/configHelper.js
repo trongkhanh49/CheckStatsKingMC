@@ -8,7 +8,7 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '../config.json');
 
 const defaultConfig = {
-  displayMode: 'text', // mode chung cũ cho AH/Order
+  displayMode: 'text', // mode chung cho Leaderboard/Bounty/AH/Order
   balDisplayMode: 'text',
   statsDisplayMode: 'text'
 };
