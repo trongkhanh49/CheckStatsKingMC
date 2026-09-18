@@ -2,124 +2,127 @@ const {
   SlashCommandBuilder,
   ChannelType,
   PermissionFlagsBits
-} = require('discord.js');
+} = require("discord.js");
 
-const OWNER_ID = (process.env.ADMIN_ID || process.env.OWNER_ID || '').trim();
-const CHANNEL_NAME = 'kingx-update';
+const MAIN_GUILD_ID = "1544703241630261270";
+const UPDATE_CHANNEL_NAME = "kingx-update";
 
-function getFiles(interaction) {
-  const files = [];
-  for (let i = 1; i <= 10; i++) {
-    const a = interaction.options.getAttachment(`anh${i}`);
-    if (a) files.push(a.url);
-  }
-  return files;
+function isOwner(interaction) {
+  const ownerId = process.env.ADMIN_ID || process.env.OWNER_ID;
+  return !!ownerId && interaction.user.id === ownerId;
 }
 
-function statusText(status, files, startedAt, extra = '') {
-  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-  const done = status === 'Gửi thành công.' ? 1 : 0;
-  return [
-    '📢 **THÔNG BÁO KINGX**',
-    `**Trạng thái:** ${status}`,
-    `**Kênh:** #${CHANNEL_NAME}`,
-    `**Tiến trình:** ${done}/1 (${done ? 100 : 0}%)`,
-    done ? '████████████████████' : '░░░░░░░░░░░░░░░░░░░░',
-    `🖼️ Ảnh: **${files.length}/10**`,
-    `⏱️ Thời gian: **${elapsed}s**`,
-    extra
-  ].filter(Boolean).join('\n');
-}
-
-async function findOrCreateChannel(guild, client) {
-  // Always search by name first.
-  const existing = guild.channels.cache.find(
-    c => c.type === ChannelType.GuildText &&
-         c.name.toLowerCase() === CHANNEL_NAME
+async function getOrCreateUpdateChannel(guild, client) {
+  let channel = guild.channels.cache.find(
+    c => c.type === ChannelType.GuildText && c.name === UPDATE_CHANNEL_NAME
   );
-  if (existing) return { channel: existing, created: false };
 
-  // Fetch the actual cached objects before putting them into permissionOverwrites.
-  // This avoids "Supplied parameter is not a cached User or Role".
-  const [botMember, ownerMember, roles] = await Promise.all([
-          guild.members.fetch(client.user.id),
-          guild.members.fetch(guild.ownerId),
-          guild.roles.fetch()
-        ]);
+  if (channel) return { channel, created: false };
 
-        const everyoneRole = roles?.everyone || null;
-        const overwrites = [];
-
-        // Có @everyone: ẩn kênh với tất cả thành viên.
-        if (everyoneRole) {
-          overwrites.push({
-            id: everyoneRole.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          });
-
-          // Bot luôn được xem/gửi tin nhắn/ảnh.
-          overwrites.push({
-            id: botMember.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages,
-              PermissionFlagsBits.AttachFiles,
-              PermissionFlagsBits.ReadMessageHistory
-            ]
-          });
-
-          // Server Owner được xem kênh.
-          overwrites.push({
-            id: ownerMember.id,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.ReadMessageHistory
-            ]
-          });
-
-          // Role có Manage Server được xem kênh.
-          for (const role of roles.values()) {
-            if (
-              role.id !== everyoneRole.id &&
-              role.permissions.has(PermissionFlagsBits.ManageGuild)
-            ) {
-              overwrites.push({
-                id: role.id,
-                allow: [
-                  PermissionFlagsBits.ViewChannel,
-                  PermissionFlagsBits.ReadMessageHistory
-                ]
-              });
-            }
-          }
-        }
-
-        // Nếu không lấy được @everyone thì KHÔNG làm command crash:
-        // tạo public channel theo yêu cầu.
-        channel = await guild.channels.create({
-          name: "kingx-update",
-          type: ChannelType.GuildText,
-          ...(overwrites.length ? { permissionOverwrites: overwrites } : {})
-        });
+  // Theo logic mới: kênh ở mọi server là PUBLIC.
+  // Không dùng permissionOverwrites để tránh lỗi cached User/Role.
+  channel = await guild.channels.create({
+    name: UPDATE_CHANNEL_NAME,
+    type: ChannelType.GuildText
+  });
 
   return { channel, created: true };
 }
 
+async function followMainAnnouncementChannel(guild, channel, client) {
+  if (guild.id === MAIN_GUILD_ID) {
+    return { ok: true, skipped: true, reason: "main-server" };
+  }
+
+  try {
+    const mainGuild = await client.guilds.fetch(MAIN_GUILD_ID);
+    const source = await mainGuild.channels.fetch().then(channels =>
+      channels.find(
+        c =>
+          c &&
+          c.type === ChannelType.GuildAnnouncement &&
+          c.id === MAIN_GUILD_ID
+      )
+    );
+
+    // ID được user cung cấp là server chính. Nếu ID đó thực tế là Guild ID,
+    // tìm channel announcement theo tên/id cấu hình bên dưới.
+    let sourceChannel = source;
+
+    if (!sourceChannel) {
+      sourceChannel = mainGuild.channels.cache.find(
+        c => c.type === ChannelType.GuildAnnouncement
+      );
+    }
+
+    if (!sourceChannel) {
+      return {
+        ok: false,
+        reason: "Không tìm thấy Announcement Channel ở server chính."
+      };
+    }
+
+    // Discord channel following: target phải là text channel trong server đích.
+    if (typeof sourceChannel.addFollower !== "function") {
+      return {
+        ok: false,
+        reason: "Discord.js hiện tại không hỗ trợ addFollower()."
+      };
+    }
+
+    await sourceChannel.addFollower(channel, UPDATE_CHANNEL_NAME);
+    return { ok: true, skipped: false, sourceId: sourceChannel.id };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: String(error?.message || error).slice(0, 250)
+    };
+  }
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('thongbao')
-    .setDescription('Gửi thông báo vào kênh kingx-update.')
-    .addStringOption(o => o.setName('noidung').setDescription('Nội dung thông báo').setRequired(true).setMaxLength(2000))
-    .addAttachmentOption(o => o.setName('anh1').setDescription('Ảnh 1'))
-    .addAttachmentOption(o => o.setName('anh2').setDescription('Ảnh 2'))
-    .addAttachmentOption(o => o.setName('anh3').setDescription('Ảnh 3'))
-    .addAttachmentOption(o => o.setName('anh4').setDescription('Ảnh 4'))
-    .addAttachmentOption(o => o.setName('anh5').setDescription('Ảnh 5'))
-    .addAttachmentOption(o => o.setName('anh6').setDescription('Ảnh 6'))
-    .addAttachmentOption(o => o.setName('anh7').setDescription('Ảnh 7'))
-    .addAttachmentOption(o => o.setName('anh8').setDescription('Ảnh 8'))
-    .addAttachmentOption(o => o.setName('anh9').setDescription('Ảnh 9'))
-    .addAttachmentOption(o => o.setName('anh10').setDescription('Ảnh 10')),
+    .setName("thongbao")
+    .setDescription("Quản lý kênh thông báo KINGX trên tất cả server")
+    .addStringOption(option =>
+      option
+        .setName("noidung")
+        .setDescription("Nội dung thông báo")
+        .setRequired(true)
+    )
+    .addAttachmentOption(option =>
+      option
+        .setName("anh")
+        .setDescription("Ảnh đính kèm")
+        .setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh2").setDescription("Ảnh 2").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh3").setDescription("Ảnh 3").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh4").setDescription("Ảnh 4").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh5").setDescription("Ảnh 5").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh6").setDescription("Ảnh 6").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh7").setDescription("Ảnh 7").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh8").setDescription("Ảnh 8").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh9").setDescription("Ảnh 9").setRequired(false)
+    )
+    .addAttachmentOption(option =>
+      option.setName("anh10").setDescription("Ảnh 10").setRequired(false)
+    ),
 
   async execute(interaction) {
     if (!isOwner(interaction)) {
@@ -130,134 +133,74 @@ module.exports = {
     }
 
     const content = interaction.options.getString("noidung", true);
-    const attachments = interaction.options.getAttachment("anh");
-    const files = attachments ? [attachments] : [];
+    const files = [];
 
-    // Thu thập tối đa 10 ảnh từ các option anh, anh2...anh10.
-    for (let i = 2; i <= 10; i++) {
-      const attachment = interaction.options.getAttachment(`anh${i}`);
+    for (let i = 1; i <= 10; i++) {
+      const attachment = interaction.options.getAttachment(
+        i === 1 ? "anh" : `anh${i}`
+      );
       if (attachment) files.push(attachment);
     }
 
     await interaction.reply({
-      content: "📢 **THÔNG BÁO KINGX**\nĐang xử lý tất cả server...",
+      content: "📢 **THÔNG BÁO KINGX**\nĐang chuẩn bị kênh thông báo...",
       ephemeral: true
     });
 
-    const startedAt = Date.now();
-    const guilds = [...client.guilds.cache.values()];
+    const guilds = [...interaction.client.guilds.cache.values()];
     let created = 0;
     let existed = 0;
+    let integrated = 0;
+    let integrationFailed = 0;
     let sent = 0;
     let failed = 0;
 
-    const update = async (lastError = "") => {
-      const done = created + existed + failed;
-      const percent = guilds.length ? Math.round((done / guilds.length) * 100) : 100;
+    const update = async () => {
+      const done = created + existed;
+      const percent = guilds.length
+        ? Math.round((done / guilds.length) * 100)
+        : 100;
       const filled = Math.round(percent / 5);
-      const bar = "█".repeat(filled) + "░".repeat(20 - filled);
-      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const bar =
+        "█".repeat(filled) + "░".repeat(20 - filled);
 
-      let status = `📢 **THÔNG BÁO KINGX**
-**Trạng thái:** ${done >= guilds.length ? "Hoàn tất." : "Đang gửi..."}
-**Server:** **${done}/${guilds.length}** (${percent}%)
-${bar}
-🆕 Tạo mới: **${created}**
-♻️ Đã có: **${existed}**
-✅ Gửi thành công: **${sent}**
-❌ Lỗi: **${failed}**
-🖼️ Ảnh: **${files.length}**
-⏱️ Thời gian: **${elapsed}s**`;
-
-      if (lastError) status += `\n\n⚠️ Lỗi gần nhất: ${lastError}`;
-
-      try {
-        await interaction.editReply({ content: status });
-      } catch (_) {}
+      await interaction.editReply({
+        content:
+          `📢 **THÔNG BÁO KINGX**\n` +
+          `**Trạng thái:** ${done >= guilds.length ? "Hoàn tất." : "Đang xử lý..."}\n` +
+          `**Server:** **${done}/${guilds.length}** (${percent}%)\n` +
+          `${bar}\n` +
+          `🆕 Kênh tạo mới: **${created}**\n` +
+          `♻️ Kênh đã có: **${existed}**\n` +
+          `🔗 Đã tích hợp: **${integrated}**\n` +
+          `⚠️ Tích hợp lỗi: **${integrationFailed}**\n` +
+          `✅ Gửi thành công: **${sent}**\n` +
+          `❌ Gửi lỗi: **${failed}**\n` +
+          `🖼️ Ảnh: **${files.length}**`
+      }).catch(() => {});
     };
-
-    await update();
 
     for (const guild of guilds) {
       try {
-        let channel = guild.channels.cache.find(
-          c => c.type === ChannelType.GuildText && c.name === "kingx-update"
+        const result = await getOrCreateUpdateChannel(
+          guild,
+          interaction.client
         );
 
-        if (channel) {
-          existed++;
-        } else {
-          // Fetch đầy đủ objects để tránh lỗi "not a cached User or Role".
-          const [botMember, ownerMember, roles] = await Promise.all([
-            guild.members.fetch(client.user.id),
-            guild.members.fetch(guild.ownerId),
-            guild.roles.fetch()
-          ]);
+        if (result.created) created++;
+        else existed++;
 
-          const everyoneRole = roles?.everyone || null;
-          const overwrites = [];
+        const integration = await followMainAnnouncementChannel(
+          guild,
+          result.channel,
+          interaction.client
+        );
 
-          // Có @everyone => ẩn kênh với member thường.
-          if (everyoneRole) {
-            overwrites.push({
-              id: everyoneRole.id,
-              deny: [PermissionFlagsBits.ViewChannel]
-            });
+        if (integration.ok) integrated++;
+        else integrationFailed++;
 
-            // Bot luôn xem/gửi/đính kèm file.
-            overwrites.push({
-              id: botMember.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.AttachFiles,
-                PermissionFlagsBits.ReadMessageHistory
-              ]
-            });
-
-            // Owner luôn xem.
-            overwrites.push({
-              id: ownerMember.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.ReadMessageHistory
-              ]
-            });
-
-            // Các role có Manage Server được xem.
-            for (const role of roles.values()) {
-              if (
-                role.id !== everyoneRole.id &&
-                role.permissions.has(PermissionFlagsBits.ManageGuild)
-              ) {
-                overwrites.push({
-                  id: role.id,
-                  allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.ReadMessageHistory
-                  ]
-                });
-              }
-            }
-          }
-
-          // Không có @everyone => tạo public, không crash.
-          channel = await guild.channels.create({
-            name: "kingx-update",
-            type: ChannelType.GuildText,
-            ...(overwrites.length
-              ? { permissionOverwrites: overwrites }
-              : {})
-          });
-
-          created++;
-        }
-
-        if (!channel.isTextBased()) {
-          throw new Error("kingx-update không phải text channel");
-        }
-
-        await channel.send({
+        // /thongbao luôn gửi thông báo vào kênh của từng server.
+        await result.channel.send({
           content,
           files,
           allowedMentions: { parse: [] }
@@ -266,14 +209,12 @@ ${bar}
         sent++;
       } catch (error) {
         failed++;
-        await update(String(error?.message || error).slice(0, 180));
       }
 
       await update();
-      // Không spam API, để Discord tự xử lý rate limit.
       await new Promise(resolve => setTimeout(resolve, 350));
     }
 
     await update();
-}
+  }
 };
