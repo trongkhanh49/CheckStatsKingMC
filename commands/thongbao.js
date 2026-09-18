@@ -122,61 +122,158 @@ module.exports = {
     .addAttachmentOption(o => o.setName('anh10').setDescription('Ảnh 10')),
 
   async execute(interaction) {
-    if (!OWNER_ID || interaction.user.id !== OWNER_ID) {
+    if (!isOwner(interaction)) {
       return interaction.reply({
-        content: '❌ Chỉ chủ bot mới có thể sử dụng /thongbao.',
+        content: "❌ Bạn không có quyền sử dụng lệnh này.",
         ephemeral: true
       });
     }
 
-    if (!interaction.guild) {
-      return interaction.reply({
-        content: '❌ Lệnh này chỉ dùng trong server.',
-        ephemeral: true
-      });
+    const content = interaction.options.getString("noidung", true);
+    const attachments = interaction.options.getAttachment("anh");
+    const files = attachments ? [attachments] : [];
+
+    // Thu thập tối đa 10 ảnh từ các option anh, anh2...anh10.
+    for (let i = 2; i <= 10; i++) {
+      const attachment = interaction.options.getAttachment(`anh${i}`);
+      if (attachment) files.push(attachment);
     }
 
-    const content = interaction.options.getString('noidung', true);
-    const files = getFiles(interaction);
+    await interaction.reply({
+      content: "📢 **THÔNG BÁO KINGX**\nĐang xử lý tất cả server...",
+      ephemeral: true
+    });
+
     const startedAt = Date.now();
+    const guilds = [...client.guilds.cache.values()];
+    let created = 0;
+    let existed = 0;
+    let sent = 0;
+    let failed = 0;
 
-    await interaction.deferReply({ ephemeral: true });
+    const update = async (lastError = "") => {
+      const done = created + existed + failed;
+      const percent = guilds.length ? Math.round((done / guilds.length) * 100) : 100;
+      const filled = Math.round(percent / 5);
+      const bar = "█".repeat(filled) + "░".repeat(20 - filled);
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
 
-    try {
-      const result = await findOrCreateChannel(
-        interaction.guild,
-        interaction.client
-      );
+      let status = `📢 **THÔNG BÁO KINGX**
+**Trạng thái:** ${done >= guilds.length ? "Hoàn tất." : "Đang gửi..."}
+**Server:** **${done}/${guilds.length}** (${percent}%)
+${bar}
+🆕 Tạo mới: **${created}**
+♻️ Đã có: **${existed}**
+✅ Gửi thành công: **${sent}**
+❌ Lỗi: **${failed}**
+🖼️ Ảnh: **${files.length}**
+⏱️ Thời gian: **${elapsed}s**`;
 
-      await interaction.editReply(
-        statusText(
-          result.created
-            ? 'Đã tạo kênh, đang gửi...'
-            : 'Đã tìm thấy kênh, đang gửi...',
+      if (lastError) status += `\n\n⚠️ Lỗi gần nhất: ${lastError}`;
+
+      try {
+        await interaction.editReply({ content: status });
+      } catch (_) {}
+    };
+
+    await update();
+
+    for (const guild of guilds) {
+      try {
+        let channel = guild.channels.cache.find(
+          c => c.type === ChannelType.GuildText && c.name === "kingx-update"
+        );
+
+        if (channel) {
+          existed++;
+        } else {
+          // Fetch đầy đủ objects để tránh lỗi "not a cached User or Role".
+          const [botMember, ownerMember, roles] = await Promise.all([
+            guild.members.fetch(client.user.id),
+            guild.members.fetch(guild.ownerId),
+            guild.roles.fetch()
+          ]);
+
+          const everyoneRole = roles?.everyone || null;
+          const overwrites = [];
+
+          // Có @everyone => ẩn kênh với member thường.
+          if (everyoneRole) {
+            overwrites.push({
+              id: everyoneRole.id,
+              deny: [PermissionFlagsBits.ViewChannel]
+            });
+
+            // Bot luôn xem/gửi/đính kèm file.
+            overwrites.push({
+              id: botMember.id,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.AttachFiles,
+                PermissionFlagsBits.ReadMessageHistory
+              ]
+            });
+
+            // Owner luôn xem.
+            overwrites.push({
+              id: ownerMember.id,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.ReadMessageHistory
+              ]
+            });
+
+            // Các role có Manage Server được xem.
+            for (const role of roles.values()) {
+              if (
+                role.id !== everyoneRole.id &&
+                role.permissions.has(PermissionFlagsBits.ManageGuild)
+              ) {
+                overwrites.push({
+                  id: role.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.ReadMessageHistory
+                  ]
+                });
+              }
+            }
+          }
+
+          // Không có @everyone => tạo public, không crash.
+          channel = await guild.channels.create({
+            name: "kingx-update",
+            type: ChannelType.GuildText,
+            ...(overwrites.length
+              ? { permissionOverwrites: overwrites }
+              : {})
+          });
+
+          created++;
+        }
+
+        if (!channel.isTextBased()) {
+          throw new Error("kingx-update không phải text channel");
+        }
+
+        await channel.send({
+          content,
           files,
-          startedAt
-        )
-      );
+          allowedMentions: { parse: [] }
+        });
 
-      const sent = await result.channel.send({
-        content,
-        files,
-        allowedMentions: { parse: [] }
-      });
+        sent++;
+      } catch (error) {
+        failed++;
+        await update(String(error?.message || error).slice(0, 180));
+      }
 
-      await interaction.editReply(
-        statusText(
-          'Gửi thành công.',
-          files,
-          startedAt,
-          `${result.created ? '🆕 Kênh vừa được tạo.' : '♻️ Dùng kênh đã có.'}\n📨 Message ID: **${sent.id}**`
-        )
-      );
-    } catch (error) {
-      console.error('[THONGBAO]', error);
-      await interaction.editReply(
-        statusText('Gửi thất bại.', files, startedAt, `❌ **Lỗi:** ${error.message}`)
-      );
+      await update();
+      // Không spam API, để Discord tự xử lý rate limit.
+      await new Promise(resolve => setTimeout(resolve, 350));
     }
-  }
+
+    await update();
+}
 };
