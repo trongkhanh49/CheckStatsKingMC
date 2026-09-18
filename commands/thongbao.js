@@ -42,58 +42,65 @@ async function findOrCreateChannel(guild, client) {
   // Fetch the actual cached objects before putting them into permissionOverwrites.
   // This avoids "Supplied parameter is not a cached User or Role".
   const [botMember, ownerMember, roles] = await Promise.all([
-    guild.members.fetch(client.user.id),
-    guild.members.fetch(guild.ownerId),
-    guild.roles.fetch()
-  ]);
+          guild.members.fetch(client.user.id),
+          guild.members.fetch(guild.ownerId),
+          guild.roles.fetch()
+        ]);
 
-  const everyoneRole = roles.everyone;
-  if (!everyoneRole) throw new Error('Không tìm thấy @everyone role.');
+        const everyoneRole = roles?.everyone || null;
+        const overwrites = [];
 
-  const overwrites = [
-    {
-      id: everyoneRole,
-      deny: [PermissionFlagsBits.ViewChannel]
-    },
-    {
-      id: botMember,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.AttachFiles,
-        PermissionFlagsBits.ReadMessageHistory
-      ]
-    },
-    {
-      id: ownerMember,
-      allow: [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.ReadMessageHistory
-      ]
-    }
-  ];
+        // Có @everyone: ẩn kênh với tất cả thành viên.
+        if (everyoneRole) {
+          overwrites.push({
+            id: everyoneRole.id,
+            deny: [PermissionFlagsBits.ViewChannel]
+          });
 
-  // Only management roles can see the update channel.
-  for (const role of roles.values()) {
-    if (role.id === everyoneRole.id || role.managed) continue;
-    if (role.permissions.has(PermissionFlagsBits.ManageGuild)) {
-      overwrites.push({
-        id: role,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.ReadMessageHistory
-        ]
-      });
-    }
-  }
+          // Bot luôn được xem/gửi tin nhắn/ảnh.
+          overwrites.push({
+            id: botMember.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.AttachFiles,
+              PermissionFlagsBits.ReadMessageHistory
+            ]
+          });
 
-  const channel = await guild.channels.create({
-    name: CHANNEL_NAME,
-    type: ChannelType.GuildText,
-    topic: 'Kênh thông báo KingX',
-    permissionOverwrites: overwrites,
-    reason: 'Tạo kênh kingx-update cho /thongbao'
-  });
+          // Server Owner được xem kênh.
+          overwrites.push({
+            id: ownerMember.id,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.ReadMessageHistory
+            ]
+          });
+
+          // Role có Manage Server được xem kênh.
+          for (const role of roles.values()) {
+            if (
+              role.id !== everyoneRole.id &&
+              role.permissions.has(PermissionFlagsBits.ManageGuild)
+            ) {
+              overwrites.push({
+                id: role.id,
+                allow: [
+                  PermissionFlagsBits.ViewChannel,
+                  PermissionFlagsBits.ReadMessageHistory
+                ]
+              });
+            }
+          }
+        }
+
+        // Nếu không lấy được @everyone thì KHÔNG làm command crash:
+        // tạo public channel theo yêu cầu.
+        channel = await guild.channels.create({
+          name: "kingx-update",
+          type: ChannelType.GuildText,
+          ...(overwrites.length ? { permissionOverwrites: overwrites } : {})
+        });
 
   return { channel, created: true };
 }
