@@ -5,6 +5,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getCustomEmoji } = require('../helpers/utils');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 const { recordError } = require('../helpers/reportHelper');
 const { getRankOreEmoji } = require('../helpers/leaderboardHelper');
 const skinHelper = require('../helpers/skinHelper');
@@ -49,10 +50,10 @@ module.exports = {
             .setColor('#ef4444')
             .setDescription(`${barrierEmoji} **${result.error || `Người chơi không hợp lệ: ${targetPlayer}`}**`)
             .setThumbnail(skinHelper.getAvatarUrl(targetPlayer, 64, true))
-            .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+            .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
             .setTimestamp();
 
-          return await interaction.editReply({ embeds: [errorEmbed] });
+          return await interaction.editReply(v2Payload({ embed: errorEmbed, accentColor: '#ef4444' }));
         }
 
         // Thành công:
@@ -67,10 +68,10 @@ module.exports = {
             `👤 **Người chơi:** \`${cleanPlayer}\`\n` +
             `${emeraldEmoji} **Tiền thưởng hiện tại:** \`${amount}\`\n\n\u200B`
           )
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        return await interaction.editReply({ embeds: [embed] });
+        return await interaction.editReply(v2Payload({ embed }));
       }
 
       // -----------------------------------------------------------------
@@ -81,7 +82,7 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setTitle(`${netherStarEmoji} **Top 5 Bounty** ${netherStarEmoji}`)
         .setColor('#2b2d31')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       if (bounties.length > 0) {
@@ -99,7 +100,7 @@ module.exports = {
         embed.setDescription(`${barrierEmoji} Hiện tại chưa có danh sách tiền thưởng nào trên server.`);
       }
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply(v2Payload({ embed }));
     } catch (error) {
       console.error(`[Discord-Bot] Lỗi khi xử lý lệnh bounty (${targetPlayer || 'Top 5'}):`, error.message);
       recordError('bounty', targetPlayer || 'Top 5', error);
@@ -109,7 +110,7 @@ module.exports = {
         .setTitle(`${barrierEmoji} Lỗi kiểm tra tiền thưởng`)
         .setDescription(`Không thể lấy dữ liệu tiền thưởng từ máy chủ KingMC.\n\n${barrierEmoji} **Chi tiết:** \`${error.message}\`\n\nVui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const row = new ActionRowBuilder()
@@ -120,7 +121,7 @@ module.exports = {
             .setStyle(ButtonStyle.Danger)
         );
 
-      await interaction.editReply({ embeds: [errorEmbed], components: [row] });
+      await interaction.editReply(v2Payload({ embed: errorEmbed, actionRow: row }));
     }
   }
 };

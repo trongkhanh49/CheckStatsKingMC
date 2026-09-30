@@ -4,6 +4,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getCustomEmoji } = require('../helpers/utils');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,7 +25,7 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle(`${enchantedBookEmoji} **HƯỚNG DẪN SỬ DỤNG BOT KINGMC** ${enchantedBookEmoji}`)
       .setColor('#2b2d31')
-      .setThumbnail('https://mc-heads.net/head/BinhLH/3d')
+      .setThumbnail('https://mc-heads.net/head/ntkhanh/3d')
       .setDescription(
         `Chào mừng bạn đến với **KingMC Stats Bot**!\n` +
         `Bạn có thể sử dụng các lệnh bằng **Slash Command (\`/\`)** hoặc **Tiền tố (\`?\`)** trực tiếp trong kênh chat.`
@@ -71,13 +72,13 @@ module.exports = {
           inline: false
         }
       )
-      .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+      .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
       .setTimestamp();
 
     if (interaction.editReply) {
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply(v2Payload({ embed }));
     } else {
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply(v2Payload({ embed }));
     }
   }
 };

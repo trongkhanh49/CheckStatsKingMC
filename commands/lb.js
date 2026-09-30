@@ -19,6 +19,7 @@ const {
   saveLeaderboardToMongo, 
   getRankOreEmoji 
 } = require('../helpers/leaderboardHelper');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 const { getCustomEmoji } = require('../helpers/utils');
 
 // Cấu hình 11 lựa chọn ngắn gọn không emoji cho Slash Command
@@ -91,7 +92,7 @@ function buildLeaderboardEmbed(categoryConfig, players) {
     .setTitle(titleText)
     .setColor(categoryConfig.color || '#2b2d31')
     .setDescription(lines.length > 0 ? lines.join('\n') : 'Chưa có dữ liệu người chơi.')
-    .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+    .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
     .setTimestamp();
 }
 
@@ -140,18 +141,16 @@ module.exports = {
     // 3. Nếu vẫn không có dữ liệu
     if (!players || players.length === 0) {
       const barrierEmoji = getCustomEmoji('barrier') || '⚠️';
-      return interaction.editReply({
-        content: `${barrierEmoji} Minecraft Bot hiện đang bận hoặc đang kết nối lại, đồng thời chưa có dữ liệu lưu trong Database cho mục **${categoryConfig.name}**. Vui lòng thử lại sau giây lát!`
-      });
+      return interaction.editReply(v2Text(`${barrierEmoji} Minecraft Bot hiện đang bận hoặc đang kết nối lại, đồng thời chưa có dữ liệu lưu trong Database cho mục **${categoryConfig.name}**. Vui lòng thử lại sau giây lát!`, { ephemeral: true }));
     }
 
-    const embed = buildLeaderboardEmbed(categoryConfig, players);
+    let currentEmbed = buildLeaderboardEmbed(categoryConfig, players);
     const row = buildCategorySelectMenu(currentType);
 
-    const replyMsg = await interaction.editReply({
-      embeds: [embed],
-      components: [row]
-    });
+    const replyMsg = await interaction.editReply(v2Payload({
+      embed: currentEmbed,
+      actionRow: row
+    }));
 
     // 4. Lắng nghe tương tác Dropdown Menu để người dùng có thể đổi sang xem các hạng mục khác
     const collector = replyMsg.createMessageComponentCollector({
@@ -161,10 +160,7 @@ module.exports = {
 
     collector.on('collect', async (selectInteraction) => {
       if (selectInteraction.user.id !== interaction.user.id) {
-        return selectInteraction.reply({
-          content: '⚠️ Chỉ người dùng lệnh này mới có thể thao tác menu!',
-          ephemeral: true
-        });
+        return selectInteraction.reply(v2Text('⚠️ Chỉ người dùng lệnh này mới có thể thao tác menu!', { ephemeral: true }));
       }
 
       const selectedKey = selectInteraction.values[0];
@@ -196,17 +192,15 @@ module.exports = {
 
       if (newPlayers && newPlayers.length > 0) {
         const newEmbed = buildLeaderboardEmbed(newConfig, newPlayers);
+        currentEmbed = newEmbed;
         const newRow = buildCategorySelectMenu(currentType);
-        await selectInteraction.editReply({
-          embeds: [newEmbed],
-          components: [newRow]
-        });
+        await selectInteraction.editReply(v2Payload({
+          embed: newEmbed,
+          actionRow: newRow
+        }));
       } else {
         const barrierEmoji = getCustomEmoji('barrier') || '⚠️';
-        await selectInteraction.followUp({
-          content: `${barrierEmoji} Hiện không thể tải dữ liệu cho mục **${newConfig.name}**. Vui lòng thử lại sau!`,
-          ephemeral: true
-        });
+        await selectInteraction.followUp(v2Text(`${barrierEmoji} Hiện không thể tải dữ liệu cho mục **${newConfig.name}**. Vui lòng thử lại!`, { ephemeral: true }));
       }
     });
 
@@ -214,7 +208,7 @@ module.exports = {
       try {
         const disabledMenu = buildCategorySelectMenu(currentType);
         disabledMenu.components[0].setDisabled(true);
-        await interaction.editReply({ components: [disabledMenu] });
+        await interaction.editReply(v2Payload({ embed: currentEmbed, actionRow: disabledMenu }));
       } catch (_) {}
     });
   }

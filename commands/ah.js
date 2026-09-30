@@ -4,6 +4,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const { getCustomEmoji } = require('../helpers/utils');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 const { recordError } = require('../helpers/reportHelper');
 const configHelper = require('../helpers/configHelper');
 const { renderBatchTablePages } = require('../helpers/renderHelper');
@@ -39,10 +40,10 @@ module.exports = {
           .setTitle(`${chestEmoji} Đấu Giá (AH): **${itemQuery}**`)
           .setDescription(`${barrierEmoji} Không tìm thấy AH cho món đồ **${itemQuery}**.`)
           .setColor('#ef4444')
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        return await interaction.editReply({ embeds: [emptyEmbed] });
+        return await interaction.editReply(v2Payload({ embed: emptyEmbed }));
       }
 
       // Chia nhỏ danh sách vật phẩm thành các trang 9 món (tối đa 5 trang)
@@ -81,7 +82,7 @@ module.exports = {
           const embed = new EmbedBuilder()
             .setImage('attachment://ah_table_p1.png')
             .setColor('#2b2d31')
-            .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+            .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
             .setTimestamp();
 
           // Nếu có từ 2 trang trở lên, tạo session phân trang (5 phút TTL) và gắn nút
@@ -96,10 +97,10 @@ module.exports = {
             });
 
             const row = buildPaginationRow(sessionId, 1, totalPages);
-            return await interaction.editReply({ embeds: [embed], files: [attachment], components: [row] });
+            return await interaction.editReply(v2Payload({ embed, actionRow: row, files: [attachment], imageAttachmentName: 'ah_table_p1.png' }));
           }
 
-          return await interaction.editReply({ embeds: [embed], files: [attachment] });
+          return await interaction.editReply(v2Payload({ embed, files: [attachment], imageAttachmentName: 'ah_table_p1.png' }));
         }
         console.error('[Discord-Bot] Render ảnh AH thất bại sau 2 lần thử:', lastError?.message);
       }
@@ -112,7 +113,7 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setTitle(textTitle)
         .setColor('#2b2d31')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const descriptionText = formatAhTextPage(page1Items, itemQuery, 1, 9);
@@ -129,10 +130,10 @@ module.exports = {
         });
 
         const row = buildPaginationRow(sessionId, 1, totalPages);
-        return await interaction.editReply({ embeds: [embed], components: [row] });
+        return await interaction.editReply(v2Payload({ embed, actionRow: row }));
       }
 
-      await interaction.editReply({ embeds: [embed] });
+      await interaction.editReply(v2Payload({ embed }));
 
     } catch (error) {
       console.error(`[Discord-Bot] Lỗi khi xử lý lệnh ah cho ${itemQuery}:`, error.message);
@@ -143,7 +144,7 @@ module.exports = {
         .setTitle(`${barrierEmoji} Lỗi kiểm tra AH`)
         .setDescription(`Không thể lấy danh sách AH cho **${itemQuery}**.\n\n${barrierEmoji} Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
         
       const row = new ActionRowBuilder()
@@ -154,7 +155,7 @@ module.exports = {
             .setStyle(ButtonStyle.Danger)
         );
 
-      await interaction.editReply({ embeds: [errorEmbed], components: [row] });
+      await interaction.editReply(v2Payload({ embed: errorEmbed, actionRow: row }));
     }
   }
 };

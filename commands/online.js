@@ -4,6 +4,7 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getCustomEmoji } = require('../helpers/utils');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 const { recordError } = require('../helpers/reportHelper');
 const skinHelper = require('../helpers/skinHelper');
 
@@ -45,10 +46,10 @@ module.exports = {
             { name: `${redstoneEmoji} Ping`, value: `\`${result.ping || 'N/A'}\``, inline: true },
             { name: `${compassEmoji} Thế giới`, value: `\`${result.world || 'N/A'}\``, inline: true }
           )
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply(v2Payload({ embed }));
       } else {
         // Người chơi OFFLINE hoặc nhập sai tên
         const serverMessage = result.message || `${targetPlayer} đã offline hoặc bạn nhập sai tên.`;
@@ -57,10 +58,10 @@ module.exports = {
           .setTitle(`🔴 Trạng thái người chơi: **${targetPlayer}**`)
           .setThumbnail(skinHelper.getAvatarUrl(targetPlayer, 64, true))
           .setDescription(`${barrierEmoji} **${serverMessage}**`)
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply(v2Payload({ embed }));
       }
 
     } catch (error) {
@@ -72,7 +73,7 @@ module.exports = {
         .setTitle(`${barrierEmoji} Lỗi kiểm tra Online`)
         .setDescription(`Không thể kiểm tra trạng thái của người chơi **${targetPlayer}**.\n\n${barrierEmoji} Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const row = new ActionRowBuilder()
@@ -83,7 +84,7 @@ module.exports = {
             .setStyle(ButtonStyle.Danger)
         );
 
-      await interaction.editReply({ embeds: [errorEmbed], components: [row] });
+      await interaction.editReply(v2Payload({ embed: errorEmbed, actionRow: row }));
     }
   }
 };

@@ -5,6 +5,9 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getCustomEmoji } = require('../helpers/utils');
 const { recordError } = require('../helpers/reportHelper');
+const configHelper = require('../helpers/configHelper');
+const { renderPlayerBalanceCard } = require('../helpers/renderHelper');
+const { v2Payload } = require('../helpers/componentsV2');
 const trackerHelper = require('../helpers/trackerHelper');
 const skinHelper = require('../helpers/skinHelper');
 
@@ -62,7 +65,7 @@ module.exports = {
         .setColor('#2b2d31')
         .setThumbnail(skinHelper.getAvatarUrl(targetPlayer, 64, true))
         .setDescription(`${emeraldEmoji} **SỐ DƯ:** \`${cleanVal}\`\n\n\u200B`)
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       // Tạo nút bấm tương tác theo dõi số dư
@@ -85,7 +88,18 @@ module.exports = {
         );
       }
 
-      await interaction.editReply({ embeds: [embed], components: [row] });
+      if (configHelper.getBsMode()) {
+        const imageBuffer = await renderPlayerBalanceCard(targetPlayer, cleanVal, result?.skin || null);
+        const attachment = new (require('discord.js').AttachmentBuilder)(imageBuffer, { name: 'bal.png' });
+        return await interaction.editReply(v2Payload({
+          embed,
+          actionRow: row,
+          files: [attachment],
+          imageAttachmentName: 'bal.png'
+        }));
+      }
+
+      await interaction.editReply(v2Payload({ embed, actionRow: row }));
     } catch (error) {
       console.error(`[Discord-Bot] Lỗi khi xử lý lệnh bal cho ${targetPlayer}:`, error.message);
       recordError('bal', targetPlayer, error);
@@ -95,7 +109,7 @@ module.exports = {
         .setTitle(`${barrierEmoji} Lỗi kiểm tra số dư`)
         .setDescription(`Không thể lấy số dư của người chơi **${targetPlayer}**.\n\n${barrierEmoji} Đã có lỗi xảy ra trong quá trình xử lý yêu cầu. Vui lòng thử lại sau hoặc bấm nút **Báo lỗi** bên dưới để gửi thông báo tới Admin!`)
         .setColor('#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const row = new ActionRowBuilder()
@@ -106,7 +120,7 @@ module.exports = {
             .setStyle(ButtonStyle.Danger)
         );
 
-      await interaction.editReply({ embeds: [errorEmbed], components: [row] });
+      await interaction.editReply(v2Payload({ embed: errorEmbed, actionRow: row, accentColor: '#ef4444' }));
     }
   }
 };

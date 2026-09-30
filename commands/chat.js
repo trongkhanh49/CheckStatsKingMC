@@ -7,6 +7,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { checkSensitiveContent } = require('../helpers/filterHelper');
 const { performWebSearch, shouldPerformWebSearch } = require('../helpers/searchHelper');
 const groqManager = require('../helpers/groqHelper');
+const { v2Payload, v2Text } = require('../helpers/componentsV2');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -25,9 +26,7 @@ module.exports = {
 
     // 0. Kiểm tra nếu Admin đã tắt tính năng AI Chat
     if (global.isAiChatEnabled === false) {
-      return await interaction.editReply({
-        content: `⚠️ **Thông báo:** ${global.aiDisableReason || 'Tính năng trò chuyện AI hiện đang tạm tắt.'}`
-      });
+      return await interaction.editReply(v2Text(`⚠️ **Thông báo:** ${global.aiDisableReason || 'Tính năng trò chuyện AI hiện đang tạm tắt.'}`));
     }
 
     // 1. Kiểm tra từ ngữ nhạy cảm (Im lặng bỏ qua)
@@ -66,12 +65,12 @@ module.exports = {
           .setTitle(`💬 Trả lời cho: "${question.length > 50 ? question.substring(0, 47) + '...' : question}"`)
           .setDescription(aiReply)
           .setColor(usedWebSearch ? '#10b981' : '#3b82f6')
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed] });
+        await interaction.editReply(v2Payload({ embed }));
       } else {
-        await interaction.editReply({ content: `**💬 Câu hỏi:** ${question}\n\n**🤖 AI:** ${aiReply.substring(0, 1900)}` });
+        await interaction.editReply(v2Text(`**💬 Câu hỏi:** ${question}\n\n**🤖 AI:** ${aiReply.substring(0, 3900)}`));
       }
     } catch (error) {
       console.error(`[Slash-Chat] Lỗi khi xử lý câu hỏi "${question}":`, error.message);
@@ -79,10 +78,10 @@ module.exports = {
         .setTitle('❌ Lỗi kết nối AI')
         .setDescription(`Không thể nhận phản hồi từ AI lúc này.\n\n⚠️ **Chi tiết lỗi:** ${error.message}`)
         .setColor('#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [errorEmbed] });
+      await interaction.editReply(v2Payload({ embed: errorEmbed, accentColor: '#ef4444' }));
     }
   }
 };
