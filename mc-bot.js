@@ -872,12 +872,17 @@ class PersistentBot extends EventEmitter {
 
       if (statsItems.length > 0 && this.statsPromiseResolve) {
         const playerSkin = skinHelper.getSkin(this.targetPlayer) || skinHelper.findSkinInTablist(this.bot, this.targetPlayer);
+        const normalizedPlayer = String(this.targetPlayer || '').trim().toLowerCase();
+        const playerOnline = Object.values(this.bot?.players || {}).some(entry =>
+          String(entry?.username || '').trim().toLowerCase() === normalizedPlayer
+        );
         this.statsPromiseResolve({
           success: true,
           serverUsed: `${this.hosts[this.currentHostIndex]}:${this.port}`,
           title: title,
           items: statsItems,
-          skin: playerSkin || null
+          skin: playerSkin || null,
+          online: playerOnline
         });
         
         if (this.bot && this.isBotOnline) {
@@ -1151,9 +1156,14 @@ class PersistentBot extends EventEmitter {
           this.bot.removeListener('messagestr', onMessage);
           this.cleanupStatsState();
           const skin = skinHelper.getSkin(player);
+          const normalizedPlayer = String(player).trim().toLowerCase();
+          const playerOnline = Object.values(this.bot?.players || {}).some(entry =>
+            String(entry?.username || '').trim().toLowerCase() === normalizedPlayer
+          );
           resolve({
             balance: message.trim(),
-            skin: skin || null
+            skin: skin || null,
+            online: playerOnline
           });
         } else if ((message.includes('không tìm thấy') || message.includes('not found')) && message.includes(player)) {
           clearTimeout(timeoutId);
@@ -1162,7 +1172,8 @@ class PersistentBot extends EventEmitter {
           const skin = skinHelper.getSkin(player);
           resolve({
             balance: `Không tìm thấy người chơi **${player}** hoặc người chơi chưa từng đăng nhập.`,
-            skin: skin || null
+            skin: skin || null,
+            online: false
           });
         }
       };

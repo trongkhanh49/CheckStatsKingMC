@@ -8,12 +8,13 @@
 
 require('dotenv').config();
 const http = require('http');
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, MessageFlags } = require('discord.js');
 const PersistentBot = require('./mc-bot');
 const QueueDispatcher = require('./queue-dispatcher');
 const CommandHandler = require('./handlers/commandHandler');
 const { handleReportButtons, sendBanAlert } = require('./helpers/reportHelper');
 const configHelper = require('./helpers/configHelper');
+const { v2Text } = require('./helpers/componentsV2');
 const { handleAiChatMessage } = require('./handlers/aiChatHandler');
 const trackerHelper = require('./helpers/trackerHelper');
 const { handleTrackerButtons, buildTrackerOverviewMessage } = require('./handlers/trackerButtonHandler');
@@ -74,7 +75,7 @@ function generateRandomUsername(length = 10) {
 async function safeSend(channel, payload) {
   if (typeof payload === 'string') {
     if (payload.length <= 1900) {
-      return await channel.send(payload);
+      return await channel.send(v2Text(payload));
     }
     const chunks = [];
     let remaining = payload;
@@ -88,10 +89,11 @@ async function safeSend(channel, payload) {
       chunks.push(remaining.substring(0, splitIdx));
       remaining = remaining.substring(splitIdx).trimStart();
     }
+    let lastMessage = null;
     for (const chunk of chunks) {
-      await channel.send(chunk);
+      lastMessage = await channel.send(v2Text(chunk));
     }
-    return;
+    return lastMessage;
   }
   return await channel.send(payload);
 }
@@ -546,9 +548,9 @@ function startTrackerScheduler(queueDispatcher) {
       const runningMsg = `${barrierEmoji} Tiến trình kiểm tra số dư hiện đang chạy, vui lòng đợi hoàn tất chu kỳ này.`;
       console.log(`[TrackerScheduler] ${runningMsg}`);
       if (targetInteraction) {
-        await targetInteraction.editReply({ content: runningMsg }).catch(() => {});
+        await targetInteraction.editReply(v2Text(runningMsg)).catch(() => {});
       } else if (statusMsg) {
-        await statusMsg.edit(runningMsg).catch(() => {});
+        await statusMsg.edit(v2Text(runningMsg)).catch(() => {});
       } else if (targetChannel) {
         await safeSend(targetChannel, runningMsg).catch(() => {});
       }
@@ -578,10 +580,10 @@ function startTrackerScheduler(queueDispatcher) {
         pendingText = null;
         try {
           if (statusMsg) {
-            await statusMsg.edit(content).catch(() => {});
+            await statusMsg.edit(v2Text(content)).catch(() => {});
           }
           if (targetInteraction) {
-            await targetInteraction.editReply({ content }).catch(() => {});
+            await targetInteraction.editReply(v2Text(content)).catch(() => {});
           }
         } catch (e) {
           // ignore
@@ -599,9 +601,9 @@ function startTrackerScheduler(queueDispatcher) {
       if (!trackedPlayers || trackedPlayers.length === 0) {
         const emptyMsg = 'ℹ️ Hiện chưa có người chơi nào trong danh sách theo dõi.';
         if (targetInteraction) {
-          await targetInteraction.editReply({ content: emptyMsg }).catch(() => {});
+          await targetInteraction.editReply(v2Text(emptyMsg)).catch(() => {});
         } else if (statusMsg) {
-          await statusMsg.edit(emptyMsg).catch(() => {});
+          await statusMsg.edit(v2Text(emptyMsg)).catch(() => {});
         } else if (targetChannel) {
           await safeSend(targetChannel, emptyMsg).catch(() => {});
         }
@@ -759,7 +761,7 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
     if (global.isBotMaintenance && interaction.isChatInputCommand()) {
        if (!ADMIN_ID || interaction.user.id !== ADMIN_ID) {
           const barrierEmoji = getCustomEmoji('barrier');
-          return interaction.reply({ content: `${barrierEmoji} **Bảo trì:** ${global.maintenanceMessage}`, ephemeral: true });
+          return interaction.reply(v2Text(`${barrierEmoji} **Bảo trì:** ${global.maintenanceMessage}`, { ephemeral: true }));
        }
     }
 
@@ -806,20 +808,20 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
       // Chặn nếu đang bảo trì (trừ Admin)
       if (global.isBotMaintenance) {
          if (!ADMIN_ID || message.author.id !== ADMIN_ID) {
-            return message.channel.send(`${barrierEmoji} **Bảo trì:** ${global.maintenanceMessage}`);
+            return message.channel.send(v2Text(`${barrierEmoji} **Bảo trì:** ${global.maintenanceMessage}`));
          }
       }
 
       const argStr = args.join(' ').trim();
       const noArgRequiredCommands = ['ping', 'help', 'lb', 'donate', 'bounty'];
       if (!noArgRequiredCommands.includes(commandName) && !argStr) {
-         return message.channel.send(`${barrierEmoji} Lệnh \`?${commandName}\` cần có tham số (tên người chơi hoặc vật phẩm). VD: \`?${commandName} BinhLH\``);
+         return message.channel.send(v2Text(`${barrierEmoji} Lệnh \`?${commandName}\` cần có tham số (tên người chơi hoặc vật phẩm). VD: \`?${commandName} BinhLH\``));
       }
 
       const userId = message.author.id;
       const spamCheck = commandHandler.checkSpam(userId);
       if (spamCheck.isSpam) {
-        return message.channel.send(spamCheck.message);
+        return message.channel.send(v2Text(spamCheck.message));
       }
 
       // Fake Interaction Object để dùng chung logic với Slash Commands
@@ -830,16 +832,19 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
           getString: (name) => argStr
         },
         deferReply: async () => {
-           interaction._replyMessage = await message.channel.send('⏳ Đang xử lý yêu cầu...');
+           interaction._replyMessage = await message.channel.send(v2Text('⏳ Đang xử lý yêu cầu...'));
         },
         editReply: async (data) => {
            if (interaction._replyMessage) {
-              const editPayload = typeof data === 'string'
-                 ? { content: data }
-                 : { content: '', ...data };
+              let editPayload = data;
+              if (typeof data === 'string') {
+                editPayload = v2Text(data);
+              } else if (!(data && typeof data === 'object' && (data.flags & MessageFlags.IsComponentsV2))) {
+                editPayload = { content: '', ...data };
+              }
               await interaction._replyMessage.edit(editPayload);
            } else {
-              await message.channel.send(data);
+              await message.channel.send(typeof data === 'string' ? v2Text(data) : data);
            }
         },
         reply: async (data) => {
@@ -920,15 +925,29 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
          if (sub === 'off') {
             global.isAiChatEnabled = false;
             global.aiDisableReason = args.join(' ') || 'Tính năng trò chuyện AI hiện đang tạm tắt.';
-            await message.channel.send(`🔴 Đã **TẮT** tính năng trò chuyện AI. Lời nhắn: \`${global.aiDisableReason}\``);
+            await message.channel.send(v2Text(`🔴 Đã **TẮT** tính năng trò chuyện AI. Lời nhắn: \`${global.aiDisableReason}\``));
          } else if (sub === 'on') {
             global.isAiChatEnabled = true;
             global.aiDisableReason = '';
-            await message.channel.send('🟢 Đã **BẬT** lại tính năng trò chuyện AI.');
+            await message.channel.send(v2Text('🟢 Đã **BẬT** lại tính năng trò chuyện AI.'));
          } else {
             const statusStr = global.isAiChatEnabled ? '🟢 Đang **BẬT**' : `🔴 Đang **TẮT** (Lý do: \`${global.aiDisableReason}\`)`;
-            await message.channel.send(`🤖 **Trạng thái AI Chat:** ${statusStr}\n\nCú pháp Admin: \`!ai on\` hoặc \`!ai off [lời nhắn]\``);
+            await message.channel.send(v2Text(`🤖 **Trạng thái AI Chat:** ${statusStr}\n\nCú pháp Admin: \`!ai on\` hoặc \`!ai off [lời nhắn]\``));
          }
+      } else if (command === 'bsmode') {
+         const targetMode = args.shift()?.toLowerCase();
+         let enabled;
+         if (targetMode === 'on' || targetMode === 'true' || targetMode === '1') {
+           enabled = configHelper.setBsMode(true);
+         } else if (targetMode === 'off' || targetMode === 'false' || targetMode === '0') {
+           enabled = configHelper.setBsMode(false);
+         } else {
+           enabled = configHelper.toggleBsMode();
+         }
+         const modeText = enabled
+           ? '🖼️ **PNG** — `/stats` và `/bal` sẽ tạo ảnh từ HTML trước khi gửi.'
+           : '📝 **TEXT** — `/stats` và `/bal` hiển thị dạng Components V2.';
+         await message.channel.send(v2Text(`✅ Đã ${enabled ? '**BẬT**' : '**TẮT**'} \`!bsmode\`.\n${modeText}`));
       } else if (command === 'mode' || command === 'render') {
          const targetMode = args.shift()?.toLowerCase();
          let newMode;
@@ -940,12 +959,12 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
          const modeDesc = newMode === 'image'
            ? '🖼️ **IMAGE** (Tạo bảng HTML 3D Icon 32x32px đính kèm Embed PNG)'
            : '📝 **TEXT** (Dòng chữ Embed truyền thống + Tên Item)';
-         await message.channel.send(`✅ Đã chuyển đổi chế độ hiển thị danh sách sang: **${newMode.toUpperCase()}**\n${modeDesc}`);
+         await message.channel.send(v2Text(`✅ Đã chuyển đổi chế độ hiển thị danh sách sang: **${newMode.toUpperCase()}**\n${modeDesc}`));
       } else if (command === 'status' || command === 'workers') {
          const workers = await queueDispatcher.getAllWorkersStatus();
          if (workers.length === 0) {
            const barrierEmoji = getCustomEmoji('barrier');
-           await message.channel.send(`${barrierEmoji} Hiện chưa có Worker nào được cấu hình.`);
+           await message.channel.send(v2Text(`${barrierEmoji} Hiện chưa có Worker nào được cấu hình.`));
            return;
          }
 
@@ -971,12 +990,12 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
 
           await safeSend(message.channel, text);
       } else if (command === 'restart') {
-         const statusMsg = await message.channel.send('🔄 **Đang gửi yêu cầu khởi động lại (restart) tới tất cả các Workers...**');
+         const statusMsg = await message.channel.send(v2Text('🔄 **Đang gửi yêu cầu khởi động lại (restart) tới tất cả các Workers...**'));
          const results = await queueDispatcher.restartAllWorkers();
 
          if (results.length === 0) {
            const barrierEmoji = getCustomEmoji('barrier');
-           await statusMsg.edit(`${barrierEmoji} Hiện không tìm thấy Worker nào (Local hoặc Remote) được cấu hình để restart.`);
+           await statusMsg.edit(v2Text(`${barrierEmoji} Hiện không tìm thấy Worker nào (Local hoặc Remote) được cấu hình để restart.`));
            return;
          }
 
@@ -988,19 +1007,19 @@ if (BOT_ROLE === 'master' || BOT_ROLE === 'standalone') {
              replyText += `**${idx + 1}. [${res.type.toUpperCase()}] ${res.name}**\n   - Trạng thái: ❌ Thất bại (\`${res.error}\`)\n`;
            }
          });
-         await statusMsg.edit(replyText);
+         await statusMsg.edit(v2Text(replyText));
       } else if (command === 'toggle') {
          const sub = args.shift()?.toLowerCase();
          if (sub === 'off') {
             global.isBotMaintenance = true;
             global.maintenanceMessage = args.join(' ') || 'Hệ thống đang bảo trì, vui lòng quay lại sau.';
-            await message.channel.send(`✅ Đã TẮT nhận lệnh. Lời nhắn: ${global.maintenanceMessage}`);
+            await message.channel.send(v2Text(`✅ Đã TẮT nhận lệnh. Lời nhắn: ${global.maintenanceMessage}`));
          } else if (sub === 'on') {
             global.isBotMaintenance = false;
             global.maintenanceMessage = '';
-            await message.channel.send('✅ Đã BẬT nhận lệnh trở lại.');
+            await message.channel.send(v2Text('✅ Đã BẬT nhận lệnh trở lại.'));
          } else {
-            await message.channel.send('Cú pháp: `!toggle on` hoặc `!toggle off [lời nhắn]`');
+            await message.channel.send(v2Text('Cú pháp: `!toggle on` hoặc `!toggle off [lời nhắn]`'));
          }
       }
     } catch (cmdErr) {
