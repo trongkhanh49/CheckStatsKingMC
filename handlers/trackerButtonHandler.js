@@ -7,10 +7,50 @@ const trackerHelper = require('../helpers/trackerHelper');
 const { renderBalanceChart } = require('../helpers/renderHelper');
 const { getCustomEmoji, formatTimeAgo, formatVietnamTime } = require('../helpers/utils');
 const skinHelper = require('../helpers/skinHelper');
+const { v2Payload, v2RawPayload, v2Text } = require('../helpers/componentsV2');
+const configHelper = require('../helpers/configHelper');
+const { renderPlayerBalanceCard } = require('../helpers/renderHelper');
 
 // Bộ nhớ tạm lưu lại view ban đầu (embeds) của tin nhắn check bal / stats để phục vụ nút "Quay lại"
 // Map<messageId, { embeds: any[], playerName: string, timestamp: number }>
 const originalViewCache = new Map();
+
+function extractComponentText(components) {
+  const values = [];
+  const walk = (node) => {
+    if (!node) return;
+    let value = node;
+    if (typeof node.toJSON === 'function') {
+      try { value = node.toJSON(); } catch (_) { value = node; }
+    }
+    if (typeof value === 'string') {
+      values.push(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (typeof value === 'object') {
+      if (typeof value.content === 'string') values.push(value.content);
+      if (value.components) walk(value.components);
+      if (value.accessory) walk(value.accessory);
+      if (value.items) walk(value.items);
+      if (value.media) walk(value.media);
+    }
+  };
+  walk(components);
+  return values.join('\n');
+}
+
+function extractBalanceFromMessage(message) {
+  const classicDescription = message?.embeds?.[0]?.description || '';
+  const v2TextValue = extractComponentText(message?.components || []);
+  const source = `${classicDescription}\n${v2TextValue}`;
+  const match = source.match(/`([^`]+)`/);
+  return match ? match[1] : null;
+}
+
 
 // Tự động dọn dẹp cache sau mỗi 30 phút để giải phóng bộ nhớ
 setInterval(() => {
@@ -41,15 +81,8 @@ async function handleTrackerButtons(interaction) {
 
     // TRƯỜNG HỢP 1: Chưa theo dõi -> BẬT THEO DÕI (Cập nhật trực tiếp nút bấm trên tin nhắn hiện tại)
     if (!isTracking) {
-      // Cố gắng trích xuất số dư hiện tại từ Embed tin nhắn (nếu có)
-      let currentBal = null;
-      if (interaction.message && interaction.message.embeds && interaction.message.embeds.length > 0) {
-        const desc = interaction.message.embeds[0].description || '';
-        const match = desc.match(/`([^`]+)`/);
-        if (match) {
-          currentBal = match[1];
-        }
-      }
+      // Cố gắng trích xuất số dư hiện tại từ tin nhắn Components V2 hoặc Embed cũ.
+      const currentBal = extractBalanceFromMessage(interaction.message);
 
       await trackerHelper.setTracking(playerName, true, currentBal);
 
@@ -65,15 +98,18 @@ async function handleTrackerButtons(interaction) {
           .setStyle(ButtonStyle.Success)
       );
 
-      // Chỉnh sửa trực tiếp nút bấm trên tin nhắn ban đầu
-      await interaction.update({ components: [row] });
+      // Chỉnh sửa trực tiếp tin nhắn hiện tại sang Components V2.
+      const fallbackEmbed = new EmbedBuilder()
+        .setTitle(`${mapEmoji} Số dư người chơi: **${playerName}**`)
+        .setColor('#2b2d31')
+        .setThumbnail(skinHelper.getAvatarUrl(playerName, 64, true))
+        .setDescription(`${getCustomEmoji('emerald')} **SỐ DƯ:** \`${currentBal || 'N/A'}\``)
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' });
+      await interaction.update(v2Payload({ embed: fallbackEmbed, actionRow: row }));
 
       // Gửi phản hồi thông báo nhẹ chỉ cho người bấm (ephemeral)
       try {
-        await interaction.followUp({
-          content: `${bellEmoji} Đã bật theo dõi số dư cho người chơi **${playerName}** thành công!\n⏰ Tự động kiểm tra định kỳ 1 giờ / lần. Dữ liệu lưu trữ trong 3 ngày.`,
-          ephemeral: true
-        });
+        await interaction.followUp(v2Text(`${bellEmoji} Đã bật theo dõi số dư cho người chơi **${playerName}** thành công!\n⏰ Tự động kiểm tra định kỳ 1 giờ / lần. Dữ liệu lưu trữ trong 3 ngày.`, { ephemeral: true }));
       } catch (e) {}
 
       return true;
@@ -83,8 +119,33 @@ async function handleTrackerButtons(interaction) {
     // Lưu lại Embeds ban đầu của tin nhắn check bal / stats để phục vụ nút "Quay lại"
     if (interaction.message && interaction.message.embeds && interaction.message.embeds.length > 0) {
       if (!originalViewCache.has(interaction.message.id)) {
+        let cachedComponents = null;
+        const firstContainer = interaction.message.components?.[0];
+        if (firstContainer) {
+          try {
+            cachedComponents = firstContainer.toJSON ? firstContainer.toJSON() : firstContainer;
+            const attachments = interaction.message.attachments;
+            const replaceAttachmentRefs = (node) => {
+              if (!node || typeof node !== 'object') return;
+              if (typeof node.url === 'string' && node.url.startsWith('attachment://')) {
+                const fileName = node.url.slice('attachment://'.length);
+                const attachment = attachments?.get(fileName) || attachments?.first?.();
+                if (attachment?.url) node.url = attachment.url;
+              }
+              for (const value of Object.values(node)) {
+                if (value && typeof value === 'object') replaceAttachmentRefs(value);
+              }
+            };
+            replaceAttachmentRefs(cachedComponents);
+          } catch (cacheErr) {
+            cachedComponents = null;
+            console.warn(`[TrackerButton] Không thể lưu Components V2 gốc cho ${playerName}:`, cacheErr.message);
+          }
+        }
+
         originalViewCache.set(interaction.message.id, {
           embeds: interaction.message.embeds.map(e => EmbedBuilder.from(e)),
+          components: cachedComponents,
           playerName,
           timestamp: Date.now()
         });
@@ -97,10 +158,7 @@ async function handleTrackerButtons(interaction) {
       const historyData = await trackerHelper.getPlayerHistory(playerName);
       if (!historyData) {
         const barrierEmoji = getCustomEmoji('barrier');
-        await interaction.followUp({
-          content: `${barrierEmoji} Không tìm thấy dữ liệu theo dõi cho người chơi **${playerName}**.`,
-          ephemeral: true
-        });
+        await interaction.followUp(v2Text(`${barrierEmoji} Không tìm thấy dữ liệu theo dõi cho người chơi **${playerName}**.`, { ephemeral: true }));
         return true;
       }
 
@@ -129,7 +187,7 @@ async function handleTrackerButtons(interaction) {
         )
         .setImage(`attachment://balance_chart_${playerName}.png`)
         .setColor(isPositive ? '#10b981' : '#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
@@ -143,14 +201,11 @@ async function handleTrackerButtons(interaction) {
           .setStyle(ButtonStyle.Secondary)
       );
 
-      await interaction.editReply({ embeds: [chartEmbed], files: [attachment], components: [row] });
+      await interaction.editReply(v2Payload({ embed: chartEmbed, actionRow: row, files: [attachment], imageAttachmentName: `balance_chart_${playerName}.png` }));
       return true;
     } catch (err) {
       console.error(`[TrackerButton] Lỗi vẽ biểu đồ cho ${playerName}:`, err.message);
-      await interaction.followUp({
-        content: `❌ Không thể tạo biểu đồ biến động lúc này: ${err.message}`,
-        ephemeral: true
-      });
+      await interaction.followUp(v2Text(`❌ Không thể tạo biểu đồ biến động lúc này: ${err.message}`, { ephemeral: true }));
       return true;
     }
   }
@@ -189,7 +244,7 @@ async function handleTrackerButtons(interaction) {
         )
         .setImage(`attachment://balance_chart_${playerName}.png`)
         .setColor(isPositive ? '#10b981' : '#ef4444')
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
       const row = new ActionRowBuilder().addComponents(
@@ -203,7 +258,7 @@ async function handleTrackerButtons(interaction) {
           .setStyle(ButtonStyle.Secondary)
       );
 
-      await interaction.editReply({ embeds: [chartEmbed], files: [attachment], components: [row] });
+      await interaction.editReply(v2Payload({ embed: chartEmbed, actionRow: row, files: [attachment], imageAttachmentName: `balance_chart_${playerName}.png` }));
       return true;
     } catch (err) {
       console.error(`[TrackerButton] Lỗi làm mới biểu đồ cho ${playerName}:`, err.message);
@@ -219,6 +274,11 @@ async function handleTrackerButtons(interaction) {
     try {
       const cached = originalViewCache.get(interaction.message.id);
       let restoredEmbeds = [];
+
+      if (cached && cached.components) {
+        await interaction.editReply(v2RawPayload(cached.components));
+        return true;
+      }
 
       if (cached && cached.embeds && cached.embeds.length > 0) {
         restoredEmbeds = cached.embeds;
@@ -240,7 +300,7 @@ async function handleTrackerButtons(interaction) {
           .setColor('#2b2d31')
           .setThumbnail(skinHelper.getAvatarUrl(playerName, 64, true))
           .setDescription(`${emeraldEmoji} **SỐ DƯ:** \`${latestBal}\`${timeAgoStr}\n\n\u200B`)
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
         restoredEmbeds = [fallbackEmbed];
       }
@@ -254,12 +314,8 @@ async function handleTrackerButtons(interaction) {
           .setStyle(ButtonStyle.Success)
       );
 
-      // Cập nhật lại tin nhắn: xóa bỏ attachments biểu đồ, khôi phục embed và nút xem biểu đồ
-      await interaction.editReply({
-        embeds: restoredEmbeds,
-        attachments: [],
-        components: [row]
-      });
+      // Cập nhật lại tin nhắn theo Components V2.
+      await interaction.editReply(v2Payload({ embed: restoredEmbeds[0], actionRow: row }));
       return true;
     } catch (err) {
       console.error(`[TrackerButton] Lỗi khi quay lại thông tin cho ${playerName}:`, err.message);
@@ -271,10 +327,7 @@ async function handleTrackerButtons(interaction) {
   if (customId.startsWith('untrack_bal_')) {
     const playerName = customId.replace('untrack_bal_', '').trim();
     const barrierEmoji = getCustomEmoji('barrier');
-    await interaction.reply({
-      content: `${barrierEmoji} Tính năng hủy theo dõi qua nút bấm đã bị vô hiệu hóa để tránh việc bất kỳ ai cũng có thể tự ý hủy theo dõi người chơi **${playerName}**.\nChỉ Admin mới có thể quản lý qua lệnh \`!tracker untrack <player>\`.`,
-      ephemeral: true
-    });
+    await interaction.reply(v2Text(`${barrierEmoji} Tính năng hủy theo dõi qua nút bấm đã bị vô hiệu hóa để tránh việc bất kỳ ai cũng có thể tự ý hủy theo dõi người chơi **${playerName}**.\nChỉ Admin mới có thể quản lý qua lệnh \`!tracker untrack <player>\`.`, { ephemeral: true }));
     return true;
   }
 
@@ -299,17 +352,11 @@ async function handleTrackerButtons(interaction) {
     const ADMIN_ID = (process.env.ADMIN_ID || '').trim();
     const barrierEmoji = getCustomEmoji('barrier');
     if (ADMIN_ID && interaction.user.id !== ADMIN_ID) {
-      await interaction.reply({
-        content: `${barrierEmoji} Chỉ Admin mới có quyền kích hoạt chu kỳ kiểm tra số dư ngay lập tức!`,
-        ephemeral: true
-      });
+      await interaction.reply(v2Text(`${barrierEmoji} Chỉ Admin mới có quyền kích hoạt chu kỳ kiểm tra số dư ngay lập tức!`, { ephemeral: true }));
       return true;
     }
 
-    await interaction.reply({
-      content: '🔄 **Đang bắt đầu chu kỳ kiểm tra số dư định kỳ cho các người chơi ngay lập tức...**',
-      ephemeral: true
-    });
+    await interaction.reply(v2Text('🔄 **Đang bắt đầu chu kỳ kiểm tra số dư định kỳ cho các người chơi ngay lập tức...**', { ephemeral: true }));
 
     if (global.trackerSchedulerInstance) {
       global.trackerSchedulerInstance.runCheckCycle({
@@ -344,7 +391,7 @@ function buildTrackerOverviewMessage(overview, page = 1, pageSize = 8) {
     .setColor('#10b981')
     .setThumbnail('https://mc-heads.net/head/BinhLH/3d')
     .setFooter({
-      text: `Trang ${currentPage}/${totalPages} • Tổng cộng: ${total} người chơi • CheckStatsKingMC • Thiết kế bởi BinhLH`
+      text: `Trang ${currentPage}/${totalPages} • Tổng cộng: ${total} người chơi • kingmc.vn・axolotl stats・ntkhanh`
     })
     .setTimestamp();
 
@@ -387,7 +434,7 @@ function buildTrackerOverviewMessage(overview, page = 1, pageSize = 8) {
       .setStyle(ButtonStyle.Success)
   );
 
-  return { embeds: [embed], components: [row] };
+  return v2Payload({ embed, actionRow: row });
 }
 
 module.exports = {

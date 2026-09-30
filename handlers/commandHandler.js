@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { REST, Routes, Collection } = require('discord.js');
+const { v2Text } = require('../helpers/componentsV2');
 
 class CommandHandler {
   constructor(client, queueDispatcher) {
@@ -108,17 +109,14 @@ class CommandHandler {
     const userId = interaction.user.id;
     const spamCheck = this.checkSpam(userId);
     if (spamCheck.isSpam) {
-      return interaction.reply({ content: spamCheck.message, ephemeral: true });
+      return interaction.reply(v2Text(spamCheck.message, { ephemeral: true }));
     }
 
     try {
       await command.execute(interaction, this.queueDispatcher);
     } catch (error) {
       console.error(`[CommandHandler] Lỗi khi thực thi lệnh /${interaction.commandName}:`, error);
-      const replyPayload = {
-        content: `❌ Đã xảy ra lỗi hệ thống khi thực hiện lệnh: \`${error.message}\``,
-        ephemeral: true
-      };
+      const replyPayload = v2Text(`❌ Đã xảy ra lỗi hệ thống khi thực hiện lệnh: \`${error.message}\``, { ephemeral: true });
 
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(replyPayload);
