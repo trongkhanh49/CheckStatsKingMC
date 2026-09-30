@@ -10,7 +10,8 @@ const { getSystemConfig, setSystemConfig, isMongoAvailable } = require('./mongoH
 const CONFIG_PATH = path.join(__dirname, '../config.json');
 
 const defaultConfig = {
-  displayMode: 'text' // Mặc định là 'text' (có thể chuyển sang 'image')
+  displayMode: 'text', // Mặc định là 'text' (có thể chuyển sang 'image')
+  bsmode: false // !bsmode: bật/tắt PNG cho /stats và /bal
 };
 
 function loadLocalConfig() {
@@ -64,6 +65,19 @@ module.exports = {
   syncFromMongo,
   getDisplayMode() {
     return currentConfig.displayMode || 'text';
+  },
+  getBsMode() {
+    return currentConfig.bsmode === true;
+  },
+  setBsMode(enabled) {
+    currentConfig.bsmode = Boolean(enabled);
+    persistConfig();
+    return currentConfig.bsmode;
+  },
+  toggleBsMode() {
+    currentConfig.bsmode = !this.getBsMode();
+    persistConfig();
+    return currentConfig.bsmode;
   },
   setDisplayMode(mode) {
     if (mode === 'text' || mode === 'image') {

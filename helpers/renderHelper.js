@@ -7,7 +7,7 @@ const path = require('path');
 const url = require('url');
 const puppeteer = require('puppeteer');
 const skinHelper = require('./skinHelper');
-const { formatTimeAgo } = require('./utils');
+const { formatTimeAgo, getStatsLabel, isDecorationItem, cleanMinecraftText: cleanMCText, smallCapsToStandardUpper } = require('./utils');
 
 let browserInstance = null;
 
@@ -1036,10 +1036,156 @@ async function renderBalanceChart(playerName, historyPayload) {
   }
 }
 
+
+const PLAYER_STATS_TEMPLATE = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://fonts.cdnfonts.com/css/minecraft-4');
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#101010}body{font-family:'Minecraft','Courier New',monospace;color:#fff}
+.card{width:1000px;height:560px;background:#151515;border:3px solid #3a3a3a;box-shadow:0 0 0 3px #0a0a0a inset;display:flex;position:relative;overflow:hidden}
+.left{width:380px;padding:34px 28px 20px;border-right:2px solid #303030;display:flex;flex-direction:column;align-items:center;position:relative}
+.name{font-size:30px;line-height:1.15;font-weight:700;text-shadow:3px 3px 0 #000;align-self:flex-start;word-break:break-word}
+.status{margin-top:10px;font-size:16px;padding:8px 12px;border:2px solid #555;background:#202020;align-self:flex-start;text-transform:uppercase;letter-spacing:1px}
+.status.online{color:#55ff55}.status.offline{color:#ff5555}
+.skin-wrap{flex:1;width:100%;display:flex;align-items:center;justify-content:center;padding-top:4px}
+.skin{max-width:290px;max-height:395px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(10px 12px 0 rgba(0,0,0,.35))}
+.right{flex:1;padding:28px 30px 70px}.heading{font-size:24px;font-weight:700;padding-bottom:10px;border-bottom:2px solid #454545;margin-bottom:14px;text-transform:uppercase}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.item{min-height:78px;border:2px solid #303030;background:#1d1d1d;padding:10px 12px}.label{font-size:13px;color:#b9b9b9;text-transform:uppercase;margin-bottom:8px}.value{font-size:18px;line-height:1.2;word-break:break-word;text-shadow:2px 2px 0 #000}
+.empty{font-size:16px;color:#aaa;padding:16px 0}.footer{position:absolute;bottom:14px;left:30px;right:30px;padding-top:9px;border-top:2px solid #2d2d2d;text-align:center;font-size:13px;color:#cfcfcf;letter-spacing:.5px}
+</style>
+</head>
+<body><div class="card"><div class="left"><div class="name">{{PLAYER_NAME}}</div><div class="status {{STATUS_CLASS}}">{{STATUS_TEXT}}</div><div class="skin-wrap"><img class="skin" src="{{SKIN_URL}}" alt="Minecraft Skin"></div></div><div class="right"><div class="heading">STATS</div><div class="stats">{{STATS}}</div></div><div class="footer">kingmc.vn - axolotl Stats -ntkhanh</div></div></body></html>`;
+
+const PLAYER_BALANCE_TEMPLATE = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+@import url('https://fonts.cdnfonts.com/css/minecraft-4');
+*{box-sizing:border-box}html,body{margin:0;padding:0;background:#101010}body{font-family:'Minecraft','Courier New',monospace;color:#fff}
+.card{width:900px;height:360px;background:#151515;border:3px solid #3a3a3a;box-shadow:0 0 0 3px #0a0a0a inset;position:relative;overflow:hidden;padding:28px}
+.player{display:flex;align-items:center;gap:18px}.head{width:88px;height:88px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(4px 5px 0 rgba(0,0,0,.35))}.name{font-size:28px;line-height:1.15;font-weight:700;text-shadow:3px 3px 0 #000;word-break:break-word}.caption{margin-top:4px;font-size:14px;color:#9e9e9e;text-transform:uppercase}
+.balance{margin-top:34px;border-top:2px solid #343434;padding-top:20px}.balance-label{font-size:16px;color:#bdbdbd;text-transform:uppercase}.balance-value{margin-top:10px;font-size:44px;line-height:1.1;font-weight:700;color:#55ff55;text-shadow:4px 4px 0 #000;word-break:break-word}
+.footer{position:absolute;bottom:15px;left:28px;right:28px;padding-top:9px;border-top:2px solid #2d2d2d;text-align:center;font-size:13px;color:#cfcfcf;letter-spacing:.5px}
+</style>
+</head>
+<body><div class="card"><div class="player"><img class="head" src="{{HEAD_URL}}" alt="Minecraft Head"><div><div class="name">{{PLAYER_NAME}}</div><div class="caption">BALANCE</div></div></div><div class="balance"><div class="balance-label">Số dư</div><div class="balance-value">{{BALANCE}}</div></div><div class="footer">kingmc.vn - axolotl Stats -ntkhanh</div></div></body></html>`;
+
+function buildStatsItemsHtml(result) {
+  const validItems = (result?.items || []).filter(item => !isDecorationItem(item));
+  const cards = [];
+
+  for (const item of validItems) {
+    const rawTitle = cleanMCText(item.displayName || '') || getStatsLabel(item);
+    const title = smallCapsToStandardUpper(rawTitle).trim() || 'STAT';
+    const lore = (item.lore || [])
+      .map(line => cleanMCText(line))
+      .filter(line => {
+        if (!line) return false;
+        if (/^[_\-+=*~]*$/.test(line)) return false;
+        if (line.includes('------') || line.includes('======') || line.includes('______')) return false;
+        const lower = line.toLowerCase();
+        if (lower.includes('nhấp') || lower.includes('click') || lower.includes('click chuột')) return false;
+        return true;
+      });
+    const value = lore.join(', ') || 'N/A';
+    cards.push(`<div class="item"><div class="label">${escapeHtml(title)}</div><div class="value">${escapeHtml(value)}</div></div>`);
+  }
+
+  if (cards.length === 0) {
+    return '<div class="empty">Không tìm thấy dữ liệu stats.</div>';
+  }
+
+  return cards.slice(0, 20).join('');
+}
+
+async function waitForImage(page, selector, timeoutMs = 1800) {
+  await page.evaluate(async ({ selector, timeoutMs }) => {
+    const img = document.querySelector(selector);
+    if (!img) return;
+    if (img.complete) return;
+    await new Promise(resolve => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      img.addEventListener('load', finish, { once: true });
+      img.addEventListener('error', finish, { once: true });
+      setTimeout(finish, timeoutMs);
+    });
+  }, { selector, timeoutMs });
+}
+
+async function renderPlayerStatsCard(playerName, result) {
+  const skin = result?.skin || skinHelper.getSkin(playerName);
+  const identifier = skin?.textureId || playerName;
+  const skinUrl = `https://mc-heads.net/player/${encodeURIComponent(identifier)}/300`;
+  const online = result?.online === true;
+
+  const statsHtml = buildStatsItemsHtml(result || {});
+  const compiledHtml = PLAYER_STATS_TEMPLATE
+    .replace(/\{\{PLAYER_NAME\}\}/g, escapeHtml(result?.player || playerName))
+    .replace(/\{\{STATUS_CLASS\}\}/g, online ? 'online' : 'offline')
+    .replace(/\{\{STATUS_TEXT\}\}/g, online ? 'ONLINE' : 'OFFLINE')
+    .replace(/\{\{SKIN_URL\}\}/g, skinUrl)
+    .replace(/\{\{STATS\}\}/g, statsHtml);
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 1000, height: 560, deviceScaleFactor: 2 });
+    await page.setContent(compiledHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await waitForImage(page, '.skin');
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        await Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, 800))]);
+      }
+    });
+    await new Promise(r => setTimeout(r, 80));
+    return await page.screenshot({ type: 'png', fullPage: false });
+  } finally {
+    await page.close();
+  }
+}
+
+async function renderPlayerBalanceCard(playerName, balanceText, skinData = null) {
+  const skin = skinData || skinHelper.getSkin(playerName);
+  const identifier = skin?.textureId || playerName;
+  const headUrl = `https://mc-heads.net/head/${encodeURIComponent(identifier)}/96`;
+
+  const compiledHtml = PLAYER_BALANCE_TEMPLATE
+    .replace(/\{\{PLAYER_NAME\}\}/g, escapeHtml(playerName))
+    .replace(/\{\{HEAD_URL\}\}/g, headUrl)
+    .replace(/\{\{BALANCE\}\}/g, escapeHtml(String(balanceText || 'N/A')));
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 900, height: 360, deviceScaleFactor: 2 });
+    await page.setContent(compiledHtml, { waitUntil: 'domcontentloaded', timeout: 10000 });
+    await waitForImage(page, '.head');
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        await Promise.race([document.fonts.ready, new Promise(resolve => setTimeout(resolve, 800))]);
+      }
+    });
+    await new Promise(r => setTimeout(r, 60));
+    return await page.screenshot({ type: 'png', fullPage: false });
+  } finally {
+    await page.close();
+  }
+}
+
 module.exports = {
   renderTableImage,
   renderBatchTablePages,
   renderBalanceChart,
+  renderPlayerStatsCard,
+  renderPlayerBalanceCard,
   formatItemDisplayName,
   getItemIconUrl,
   formatMinecraftTextToHtml,

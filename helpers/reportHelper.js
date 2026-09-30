@@ -3,6 +3,7 @@
  */
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { v2Payload, v2Text } = require('./componentsV2');
 
 // Bộ nhớ lưu chi tiết lỗi của từng tác vụ gần đây (TTL 15 phút)
 const errorStore = new Map();
@@ -40,10 +41,10 @@ async function sendBanAlert(client, username, reason) {
           { name: '🤖 Tài khoản Bot', value: `\`${username}\``, inline: true },
           { name: '📝 Lý do / Nội dung từ Server', value: `\`\`\`${reason || 'Không rõ lý do'}\`\`\`` }
         )
-        .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
         .setTimestamp();
 
-      await admin.send({ embeds: [banEmbed] });
+      await admin.send(v2Payload({ embed: banEmbed }));
       console.log(`[ReportHelper] Đã gửi thông báo Cảnh báo BAN tới Admin (${ADMIN_ID}).`);
     }
   } catch (err) {
@@ -73,11 +74,7 @@ async function handleReportButtons(interaction, client) {
           .setStyle(ButtonStyle.Secondary)
       );
 
-    await interaction.reply({
-      content: `⚠️ **Nhắc nhở quan trọng:** Trước khi bấm xác nhận báo lỗi, hãy chắc chắn rằng tên người chơi **${targetPlayer}** in-game là chính xác.\n\nBạn có muốn tiếp tục báo lỗi này tới Admin không?`,
-      components: [confirmRow],
-      ephemeral: true
-    });
+    await interaction.reply(v2Text(`⚠️ **Nhắc nhở quan trọng:** Trước khi bấm xác nhận báo lỗi, hãy chắc chắn rằng tên người chơi **${targetPlayer}** in-game là chính xác.\n\nBạn có muốn tiếp tục báo lỗi này tới Admin không?`, { actionRow: confirmRow, ephemeral: true }));
     return true;
   } 
   
@@ -89,10 +86,7 @@ async function handleReportButtons(interaction, client) {
     
     const ADMIN_ID = process.env.ADMIN_ID;
     if (!ADMIN_ID) {
-      await interaction.reply({
-        content: '❌ Lỗi: Chưa cấu hình ID Admin (`ADMIN_ID`) trong file cấu hình `.env` của bot.',
-        ephemeral: true
-      });
+      await interaction.reply(v2Text('❌ Lỗi: Chưa cấu hình ID Admin (`ADMIN_ID`) trong file cấu hình `.env` của bot.', { ephemeral: true }));
       return true;
     }
 
@@ -116,33 +110,24 @@ async function handleReportButtons(interaction, client) {
             { name: '⚙️ Loại lỗi', value: typeName, inline: true },
             { name: '🚨 Full Chi tiết Lỗi (Admin Debug)', value: `\`\`\`${errorDetail}\`\`\`` }
           )
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
-        await admin.send({ embeds: [reportEmbed] });
+        await admin.send(v2Payload({ embed: reportEmbed }));
         
-        await interaction.update({
-          content: `✅ Gửi báo lỗi thành công tới Admin về người chơi/vật phẩm **${targetPlayer}**.\nNếu đây thực sự là lỗi hệ thống, Admin sẽ cố gắng khắc phục sớm nhất có thể! Cảm ơn bạn đã phản hồi.`,
-          components: []
-        });
+        await interaction.update(v2Text(`✅ Gửi báo lỗi thành công tới Admin về người chơi/vật phẩm **${targetPlayer}**.\nNếu đây thực sự là lỗi hệ thống, Admin sẽ cố gắng khắc phục sớm nhất có thể! Cảm ơn bạn đã phản hồi.`));
       } else {
         throw new Error('Không tìm thấy Admin Discord với ID đã cấu hình.');
       }
     } catch (err) {
       console.error('[Discord-Bot] Lỗi gửi báo lỗi cho Admin:', err);
-      await interaction.update({
-        content: `❌ Gửi báo lỗi thất bại. Chi tiết: \`${err.message}\``,
-        components: []
-      });
+      await interaction.update(v2Text(`❌ Gửi báo lỗi thất bại. Chi tiết: \`${err.message}\``));
     }
     return true;
   } 
   
   if (customId === 'cancel_report') {
-    await interaction.update({
-      content: '❌ Đã hủy yêu cầu báo lỗi.',
-      components: []
-    });
+    await interaction.update(v2Text('❌ Đã hủy yêu cầu báo lỗi.'));
     return true;
   }
 

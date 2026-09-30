@@ -6,6 +6,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { renderTableImage, formatItemDisplayName, normalizeSmallCaps, cleanBuyerName } = require('./renderHelper');
 const { getCustomEmoji } = require('./utils');
+const { v2Payload, v2Text } = require('./componentsV2');
 
 // Bộ nhớ đệm lưu trữ các phiên phân trang đang hoạt động
 const paginationSessions = new Map();
@@ -54,6 +55,47 @@ function buildPaginationRow(sessionId, currentPage, totalPages, disabled = false
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(disabled || currentPage >= totalPages)
   );
+}
+
+
+/**
+ * Chuyển message phân trang sang Components V2 khi phiên hết hạn.
+ */
+async function disablePaginationMessage(session) {
+  if (!session?.interaction || !session.pages) return;
+
+  const disabledRow = buildPaginationRow(session.id, session.currentPage, session.totalPages, true);
+
+  if (session.displayMode === 'image') {
+    const imageBuffer = session.cachedImages.get(session.currentPage);
+    if (imageBuffer) {
+      const fileName = `${session.type}_table_p${session.currentPage}.png`;
+      const attachment = new AttachmentBuilder(imageBuffer, { name: fileName });
+      const imageEmbed = new EmbedBuilder()
+        .setImage(`attachment://${fileName}`)
+        .setColor('#2b2d31')
+        .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' });
+      await session.interaction.editReply(
+        v2Payload({ embed: imageEmbed, actionRow: disabledRow, files: [attachment], imageAttachmentName: fileName })
+      ).catch(() => {});
+      return;
+    }
+  }
+
+  const pageItems = session.pages[session.currentPage - 1] || [];
+  const chestEmoji = getCustomEmoji('chest');
+  const titlePrefix = session.type === 'ah' ? 'Danh sách AH' : 'Danh sách Order';
+  const textEmbed = new EmbedBuilder()
+    .setTitle(`${chestEmoji} ${titlePrefix}: **${session.itemQuery}** (Trang ${session.currentPage}/${session.totalPages})`)
+    .setDescription(
+      session.type === 'ah'
+        ? formatAhTextPage(pageItems, session.itemQuery, session.currentPage, 9)
+        : formatOrderTextPage(pageItems, session.itemQuery, session.currentPage, 9)
+    )
+    .setColor('#2b2d31')
+    .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' });
+
+  await session.interaction.editReply(v2Payload({ embed: textEmbed, actionRow: disabledRow })).catch(() => {});
 }
 
 /**
@@ -184,10 +226,7 @@ function createPaginationSession({ interaction, type, itemQuery, pages, displayM
   const scheduleCleanup = () => {
     return setTimeout(async () => {
       try {
-        const disabledRow = buildPaginationRow(sessionId, session.currentPage, session.totalPages, true);
-        if (session.interaction) {
-          await session.interaction.editReply({ components: [disabledRow] }).catch(() => {});
-        }
+        await disablePaginationMessage(session);
       } catch (e) {}
 
       // Xóa hoàn toàn khỏi RAM
@@ -230,10 +269,7 @@ async function handlePaginationButtons(interaction) {
   // Phiên đã hết hạn (sau 5 phút)
   if (!session) {
     const barrierEmoji = getCustomEmoji('barrier');
-    await interaction.reply({
-      content: `${barrierEmoji} Phiên xem trang đã hết hạn (5 phút) để giải phóng tài nguyên. Vui lòng gõ lại lệnh nếu muốn tra cứu tiếp nhé!`,
-      ephemeral: true
-    }).catch(() => {});
+    await interaction.reply(v2Text(`${barrierEmoji} Phiên xem trang đã hết hạn (5 phút) để giải phóng tài nguyên. Vui lòng gõ lại lệnh nếu muốn tra cứu tiếp nhé!`, { ephemeral: true })).catch(() => {});
     return true;
   }
 
@@ -255,10 +291,7 @@ async function handlePaginationButtons(interaction) {
   if (session.timer) clearTimeout(session.timer);
   session.timer = setTimeout(async () => {
     try {
-      const disabledRow = buildPaginationRow(sessionId, session.currentPage, session.totalPages, true);
-      if (session.interaction) {
-        await session.interaction.editReply({ components: [disabledRow] }).catch(() => {});
-      }
+      await disablePaginationMessage(session);
     } catch (e) {}
 
     if (session.cachedImages) session.cachedImages.clear();
@@ -300,11 +333,11 @@ async function handlePaginationButtons(interaction) {
         const embed = new EmbedBuilder()
           .setImage(`attachment://${fileName}`)
           .setColor('#2b2d31')
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
         const row = buildPaginationRow(sessionId, newPage, session.totalPages);
-        await interaction.editReply({ embeds: [embed], files: [attachment], components: [row] });
+        await interaction.editReply(v2Payload({ embed, actionRow: row, files: [attachment], imageAttachmentName: fileName }));
         return true;
       }
     }
@@ -316,7 +349,7 @@ async function handlePaginationButtons(interaction) {
     const embed = new EmbedBuilder()
       .setTitle(`${chestEmoji} ${titlePrefix}: **${session.itemQuery}** (Trang ${newPage}/${session.totalPages})`)
       .setColor('#2b2d31')
-      .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+      .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
       .setTimestamp();
 
     const descText = session.type === 'ah'
@@ -326,7 +359,7 @@ async function handlePaginationButtons(interaction) {
     embed.setDescription(descText);
 
     const row = buildPaginationRow(sessionId, newPage, session.totalPages);
-    await interaction.editReply({ embeds: [embed], files: [], components: [row] });
+    await interaction.editReply(v2Payload({ embed, actionRow: row }));
     return true;
 
   } catch (err) {
