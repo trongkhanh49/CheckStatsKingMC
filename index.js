@@ -35,6 +35,8 @@ const WORKER_SECRET = process.env.WORKER_SECRET || '';
 const ADMIN_ID = (process.env.ADMIN_ID || '').trim(); // Dùng để cấu hình Admin ID chạy lệnh qua DM
 
 const MC_AUTH_TYPE = process.env.MC_AUTH_TYPE || 'offline';
+const MC_USERNAME = String(process.env.MC_USERNAME || '').trim();
+const MC_PASSWORD = String(process.env.MC_PASSWORD || '');
 const MC_SERVER_PORT = parseInt(process.env.MC_SERVER_PORT) || 25565;
 const BOT_CHECK_TIMEOUT = parseInt(process.env.BOT_CHECK_TIMEOUT) || 15000;
 
@@ -101,14 +103,16 @@ async function safeSend(channel, payload) {
 // 1. Khởi tạo Local Minecraft Bot (Nếu ở chế độ 'worker' hoặc 'standalone')
 let localMcBot = null;
 if (BOT_ROLE === 'worker' || BOT_ROLE === 'standalone') {
-  // Tự tạo random 10 ký tự chữ hoa/thường mỗi khi khởi động (bỏ đọc từ env)
+  // Tài khoản chính lấy trực tiếp từ ENV. Chỉ fallback random khi ENV chưa cấu hình để giữ tương thích.
   const credentials = {
-    username: generateRandomUsername(10),
+    username: MC_USERNAME || generateRandomUsername(10),
+    primaryUsername: MC_USERNAME || '',
     authType: MC_AUTH_TYPE,
-    password: generateRandomUsername(10)
+    password: MC_PASSWORD || generateRandomUsername(10),
+    primaryPassword: MC_PASSWORD || ''
   };
 
-  console.log(`[Worker] Khởi tạo Minecraft Bot với Username: [${credentials.username}] và Password: [${credentials.password}]`);
+  console.log(`[Worker] Khởi tạo Minecraft Bot với Username chính: [${credentials.username}]${MC_USERNAME ? ' (từ MC_USERNAME)' : ' (fallback random)'}`);
   localMcBot = new PersistentBot(credentials, MC_SERVER_HOSTS, MC_SERVER_PORT);
   
   localMcBot.on('notifyAdmin', async (message) => {
@@ -136,8 +140,8 @@ if (BOT_ROLE === 'worker' || BOT_ROLE === 'standalone') {
     }
   });
 
-  localMcBot.on('ipLimitDetected', async ({ username, reason }) => {
-    console.warn(`[Worker] 🚨 Nhận tín hiệu ipLimitDetected: [${username}] - Lý do: [${reason}]`);
+  localMcBot.on('ipLimitDetected', async ({ username, reason, category, source, primaryUsername, recoveredTo }) => {
+    console.warn(`[Worker] 🚨 Nhận tín hiệu network restriction: [${username}] | category=${category || 'ip_limit'} | source=${source || 'unknown'} | reason=${reason}`);
     const MASTER_URL = process.env.MASTER_URL;
     if (MASTER_URL) {
       try {
@@ -148,6 +152,10 @@ if (BOT_ROLE === 'worker' || BOT_ROLE === 'standalone') {
           serviceId: process.env.RENDER_SERVICE_ID || '',
           serviceName: process.env.RENDER_SERVICE_NAME || '',
           username,
+          primaryUsername: primaryUsername || MC_USERNAME || username || '',
+          recoveredTo: recoveredTo || username || '',
+          category: category || 'ip_limit',
+          source: source || 'unknown',
           reason,
           workerUrl: process.env.RENDER_EXTERNAL_URL || process.env.WORKER_URL || ''
         });
@@ -284,6 +292,8 @@ const server = http.createServer(async (req, res) => {
       ready: isReady,
       busy: isBusy,
       username: localMcBot ? localMcBot.credentials.username : 'NoLocalBot',
+      primaryUsername: localMcBot?.primaryUsername || MC_USERNAME || '',
+      diagnostics: localMcBot?.getDiagnostics ? localMcBot.getDiagnostics() : null,
       timestamp: new Date().toISOString()
     };
     return res.end(JSON.stringify(healthStatus));
@@ -304,12 +314,10 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ success: false, error: 'Node này không chạy Local Worker' }));
     }
 
-    const newUsername = generateRandomUsername(10);
-    const newPassword = generateRandomUsername(10);
-    localMcBot.credentials.username = newUsername;
-    localMcBot.credentials.password = newPassword;
+    localMcBot.restorePrimaryCredentials('remote restart');
+    const restartUsername = localMcBot.credentials.username;
 
-    console.log(`[Worker] 🔄 Nhận lệnh restart từ xa từ Master. Username mới: [${newUsername}], Password mới: [${newPassword}]`);
+    console.log(`[Worker] 🔄 Nhận lệnh restart từ xa từ Master. Giữ Username chính: [${restartUsername}]`);
 
     if (localMcBot.bot) {
       localMcBot.bot.end('Remote restart request');
@@ -321,7 +329,7 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({
       success: true,
       message: 'Đã nhận lệnh restart thành công',
-      username: newUsername
+      username: restartUsername
     }));
   }
 
@@ -372,16 +380,17 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body || '{}');
-        const { username, reason, workerUrl, accountId, serviceId } = payload;
-        console.warn(`[Master API] 🚨 Nhận báo cáo IP Limit từ Worker [${username || 'N/A'}] (Account: ${accountId || 'N/A'}, Service: ${serviceId || 'N/A'}, URL: ${workerUrl || 'N/A'}): ${reason}`);
+        const { username, primaryUsername, recoveredTo, category, source, reason, workerUrl, accountId, serviceId } = payload;
+        const restrictionType = category === 'vpn_block' ? 'VPN/Proxy Block' : 'IP/Registration Limit';
+        console.warn(`[Master API] 🚨 Nhận báo cáo ${restrictionType} từ Worker [${username || primaryUsername || 'N/A'}] (Account: ${accountId || 'N/A'}, Service: ${serviceId || 'N/A'}, URL: ${workerUrl || 'N/A'}, Source: ${source || 'unknown'}): ${reason}`);
         
         // Kích hoạt tiến trình Xoay Render Worker bất đồng bộ
         renderManager.rotateWorker({
           accountId,
           serviceId,
           workerUrl,
-          reason,
-          username,
+          reason: `[${restrictionType}] ${reason}${recoveredTo ? ` | primary=${recoveredTo}` : ''}`,
+          username: username || primaryUsername || recoveredTo || '',
           queueDispatcher,
           discordClient: global.globalDiscordClient,
           adminId: ADMIN_ID
@@ -394,7 +403,7 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
-          message: 'Đã nhận báo cáo giới hạn IP và bắt đầu tiến trình xoay Worker.'
+          message: `Đã nhận báo cáo ${restrictionType} và bắt đầu tiến trình tự phục hồi/xoay Worker.`
         }));
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });

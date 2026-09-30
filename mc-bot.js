@@ -259,20 +259,82 @@ function waitForGuiUpdate(bot, timeoutMs = 1500) {
   });
 }
 
+function normalizeDetectionText(text) {
+  return normalizeSmallCaps(cleanMinecraftText(text))
+    .replace(/[\u2018\u2019\u201C\u201D]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isVpnBlocked(text) {
+  const t = normalizeDetectionText(text);
+  if (!t) return false;
+  return (t.includes('dang su dung vpn') ||
+          t.includes('ban dang su dung vpn') ||
+          t.includes('using vpn') ||
+          t.includes('vpn detected') ||
+          t.includes('turn off vpn') ||
+          t.includes('tat vpn') ||
+          t.includes('proxy detected') ||
+          t.includes('using a proxy') ||
+          t.includes('proxy is not allowed') ||
+          (t.includes('vpn') && (t.includes('vui long tat') || t.includes('please disable'))));
+}
+
 function checkIpLimit(text) {
   if (!text || typeof text !== 'string') return false;
-  const t = text.toLowerCase();
-  return t.includes('vượt quá giới hạn tối đa đăng ký') ||
-         t.includes('vuot qua gioi han toi da dang ky') ||
-         (t.includes('vượt quá giới hạn') && t.includes('đăng ký')) ||
+  const t = normalizeDetectionText(text);
+  return t.includes('vuot qua gioi han toi da dang ky') ||
          (t.includes('vuot qua gioi han') && t.includes('dang ky')) ||
-         (t.includes('giới hạn') && t.includes('đăng ký') && t.includes('tài khoản')) ||
          (t.includes('gioi han') && t.includes('dang ky') && t.includes('tai khoan')) ||
          t.includes('your ip is banned') ||
-         t.includes('địa chỉ ip của bạn đã bị') ||
          t.includes('dia chi ip cua ban da bi') ||
-         t.includes('ip bị cấm') ||
-         t.includes('ip bi cam');
+         t.includes('ip bi cam') ||
+         isVpnBlocked(t);
+}
+
+function parseKickReason(reason) {
+  let value = reason;
+  if (value && typeof value === 'object') {
+    // Mineflayer có thể trả reason dưới dạng object JSON text component.
+    try {
+      return cleanMinecraftText(parseMinecraftJSON(value));
+    } catch (_) {
+      return cleanMinecraftText(JSON.stringify(value));
+    }
+  }
+
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const parsed = JSON.parse(raw);
+    const parsedText = parseMinecraftJSON(parsed);
+    if (parsedText) return cleanMinecraftText(parsedText);
+  } catch (_) {}
+
+  // Trường hợp reason bị bọc thêm text trước JSON.
+  const jsonStart = raw.indexOf('{');
+  if (jsonStart > 0) {
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart));
+      const parsedText = parseMinecraftJSON(parsed);
+      if (parsedText) {
+        const prefix = cleanMinecraftText(raw.slice(0, jsonStart));
+        return cleanMinecraftText(prefix ? `${prefix} ${parsedText}` : parsedText);
+      }
+    } catch (_) {}
+  }
+
+  return cleanMinecraftText(raw);
+}
+
+function classifyConnectionRestriction(text) {
+  const clean = parseKickReason(text);
+  const normalized = normalizeDetectionText(clean);
+  if (isVpnBlocked(normalized)) return 'vpn_block';
+  if (checkIpLimit(normalized)) return 'ip_limit';
+  return '';
 }
 
 class PersistentBot extends EventEmitter {
@@ -300,6 +362,153 @@ class PersistentBot extends EventEmitter {
     this.currentAction = null; // 'stats' | 'bal' | 'order'
     this.isProcessingOrder = false;
     this.isIpLimited = false;
+
+    // Username chính lấy từ MC_USERNAME; luôn giữ lại để tự phục hồi sau lỗi IP/VPN.
+    this.primaryUsername = String(credentials.primaryUsername || credentials.username || process.env.MC_USERNAME || '').trim();
+    if (!this.primaryUsername) this.primaryUsername = String(credentials.username || '').trim();
+    this.primaryPassword = String(credentials.primaryPassword || credentials.password || process.env.MC_PASSWORD || '');
+
+    // Chẩn đoán/recovery nội bộ — không thêm command mới.
+    this.recoveryTimer = null;
+    this.recoveryInProgress = false;
+    this.lastRestrictionSignature = '';
+    this.lastRestrictionAt = 0;
+    this.lastDisconnectAt = 0;
+    this.lastError = '';
+    this.recoveryAttempts = 0;
+    this.usePrimaryCredentialsOnNextConnect = false;
+    this.metrics = {
+      connectAttempts: 0,
+      successfulSpawns: 0,
+      reconnects: 0,
+      errors: 0,
+      kicks: 0,
+      disconnects: 0,
+      ipLimitDetections: 0,
+      vpnDetections: 0,
+      banDetections: 0,
+      recoveryCount: 0,
+      lastEventAt: null
+    };
+    this.recentEvents = [];
+  }
+
+  logEvent(level, event, details = {}) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      level,
+      event,
+      username: this.primaryUsername || this.credentials.username || '',
+      currentUsername: this.credentials.username || '',
+      ...details
+    };
+    this.metrics.lastEventAt = entry.timestamp;
+    this.recentEvents.push(entry);
+    if (this.recentEvents.length > 50) this.recentEvents.shift();
+
+    const prefix = `[MC-Bot][${level.toUpperCase()}][${event}]`;
+    const detailText = Object.entries(details)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key}=${typeof value === 'object' ? JSON.stringify(value) : value}`)
+      .join(' | ');
+    console.log(`${prefix}${detailText ? ` ${detailText}` : ''}`);
+    return entry;
+  }
+
+  restorePrimaryCredentials(reason = '') {
+    const before = this.credentials.username;
+    if (this.primaryUsername) this.credentials.username = this.primaryUsername;
+    if (this.primaryPassword) this.credentials.password = this.primaryPassword;
+    this.credentials.primaryUsername = this.primaryUsername;
+    this.credentials.primaryPassword = this.primaryPassword;
+    if (before !== this.credentials.username) {
+      this.logEvent('info', 'CREDENTIALS_RESTORED', {
+        from: before,
+        to: this.credentials.username,
+        reason
+      });
+    }
+    return this.credentials.username;
+  }
+
+  getDiagnostics() {
+    return {
+      primaryUsername: this.primaryUsername,
+      username: this.credentials.username,
+      online: this.isBotOnline,
+      ready: this.isReady,
+      busy: !!this.targetPlayer,
+      currentAction: this.currentAction,
+      targetPlayer: this.targetPlayer,
+      isIpLimited: this.isIpLimited,
+      recoveryInProgress: this.recoveryInProgress,
+      recoveryAttempts: this.recoveryAttempts,
+      currentHost: this.hosts[this.currentHostIndex] || '',
+      lastError: this.lastError,
+      lastRestriction: this.lastRestriction || null,
+      metrics: { ...this.metrics },
+      recentEvents: this.recentEvents.slice(-10)
+    };
+  }
+
+  handleNetworkRestriction(reason, source = 'unknown') {
+    const cleanReason = parseKickReason(reason);
+    const category = classifyConnectionRestriction(cleanReason);
+    if (!category) return false;
+
+    const now = Date.now();
+    const signature = `${category}:${normalizeDetectionText(cleanReason)}`;
+    if (signature === this.lastRestrictionSignature && now - this.lastRestrictionAt < 15000) {
+      return true;
+    }
+
+    this.lastRestrictionSignature = signature;
+    this.lastRestrictionAt = now;
+    this.lastRestriction = { category, source, reason: cleanReason, at: new Date(now).toISOString() };
+    this.recoveryInProgress = true;
+    this.recoveryAttempts += 1;
+    this.metrics.recoveryCount += 1;
+    if (category === 'vpn_block') this.metrics.vpnDetections += 1;
+    else this.metrics.ipLimitDetections += 1;
+    this.isIpLimited = true;
+
+    // Chỉ ép về ENV username/password cho đúng incident IP/VPN này; không phá logic đổi tên khi BAN.
+    this.usePrimaryCredentialsOnNextConnect = true;
+    const restoredUsername = this.restorePrimaryCredentials(category);
+    this.cleanupStatsState();
+    this.targetPlayer = null;
+    this.currentAction = null;
+    this.isReady = false;
+
+    this.logEvent('warn', 'NETWORK_RESTRICTION_DETECTED', {
+      category,
+      source,
+      reason: cleanReason,
+      restoredUsername,
+      attempt: this.recoveryAttempts
+    });
+
+    const prefix = category === 'vpn_block'
+      ? '🚫 **VPN/Proxy bị KingMC chặn**'
+      : '🚨 **Worker đạt giới hạn IP/đăng ký KingMC**';
+    this.emit('ipLimitDetected', {
+      username: restoredUsername,
+      primaryUsername: this.primaryUsername,
+      reason: cleanReason,
+      category,
+      source,
+      recoveredTo: restoredUsername
+    });
+    this.emit('notifyAdmin', `${prefix}: **[\`${restoredUsername}\`]** \`${cleanReason}\`\n• **Tài khoản chính (ENV):** \`${restoredUsername}\`\n• **Tự phục hồi:** Đã reset trạng thái worker và yêu cầu đổi IP/worker.`);
+
+    try {
+      if (this.bot) this.bot.end(`Auto-recovery: ${category}`);
+    } catch (err) {
+      this.lastError = err.message;
+      this.logEvent('error', 'RECOVERY_END_FAILED', { error: err.message });
+      this.scheduleReconnect(5000);
+    }
+    return true;
   }
 
   connect() {
@@ -307,9 +516,18 @@ class PersistentBot extends EventEmitter {
     this.isBotOnline = false;
     this.isReady = false;
     this.isIpLimited = false;
+    this.recoveryInProgress = false;
+    this.lastError = '';
+    this.metrics.connectAttempts += 1;
+
+    // Chỉ khôi phục ENV credentials khi session trước đó gặp lỗi IP/VPN.
+    if (this.usePrimaryCredentialsOnNextConnect) {
+      this.restorePrimaryCredentials('network restriction recovery');
+      this.usePrimaryCredentialsOnNextConnect = false;
+    }
 
     const host = this.hosts[this.currentHostIndex];
-    console.log(`[MC-Bot] Đang kết nối tới ${host}:${this.port}...`);
+    this.logEvent('info', 'CONNECT_ATTEMPT', { host, port: this.port, attempt: this.metrics.connectAttempts });
 
     const options = {
       host: host,
@@ -338,21 +556,23 @@ class PersistentBot extends EventEmitter {
 
   registerEvents() {
     this.bot.on('error', (err) => {
-      console.error(`[MC-Bot] Lỗi kết nối: ${err.message}`);
+      this.metrics.errors += 1;
+      this.lastError = err?.message || String(err);
+      this.logEvent('error', 'BOT_ERROR', { error: this.lastError });
     });
 
     this.bot.on('kicked', (reason) => {
-      const reasonText = typeof reason === 'string' ? reason : JSON.stringify(reason);
-      const cleanReason = cleanMinecraftText(reasonText);
-      console.warn(`[MC-Bot] Bị kick: ${cleanReason}`);
+      this.metrics.kicks += 1;
+      const cleanReason = parseKickReason(reason);
+      const lowerReason = normalizeDetectionText(cleanReason);
+      this.logEvent('warn', 'KICKED', { reason: cleanReason });
 
-      const lowerReason = cleanReason.toLowerCase();
-      if (checkIpLimit(lowerReason)) {
-        console.warn(`[MC-Bot] 🚨 ĐÃ PHÁT HIỆN BỊ KICK DO GIỚI HẠN IP: ${cleanReason}`);
-        this.isIpLimited = true;
-        this.emit('ipLimitDetected', { username: this.credentials.username, reason: cleanReason });
-        this.emit('notifyAdmin', `🚨 **Worker [\`${this.credentials.username}\`]** bị kick do giới hạn IP KingMC: \`${cleanReason}\``);
-      } else if (lowerReason.includes('ban') || lowerReason.includes('banned') || lowerReason.includes('bị cấm') || lowerReason.includes('bi cam') || lowerReason.includes('bị ban') || lowerReason.includes('bi ban')) {
+      if (this.handleNetworkRestriction(cleanReason, 'kicked')) {
+        return;
+      }
+
+      if (lowerReason.includes('ban') || lowerReason.includes('banned') || lowerReason.includes('bi cam') || lowerReason.includes('bi ban')) {
+        this.metrics.banDetections += 1;
         this.emit('banDetected', { username: this.credentials.username, reason: cleanReason });
       } else {
         this.emit('notifyAdmin', `⚠️ **Worker [\`${this.credentials.username}\`]** bị kick khỏi server! Lý do: \`${cleanReason}\``);
@@ -360,23 +580,37 @@ class PersistentBot extends EventEmitter {
     });
 
     this.bot.on('end', (reason) => {
+      this.metrics.disconnects += 1;
       this.isBotOnline = false;
       this.isReady = false;
-      console.log(`[MC-Bot] Mất kết nối. Đang lên lịch Reconnect sau 10 giây...`);
-      this.emit('notifyAdmin', `🔴 **Worker [\`${this.credentials.username}\`]** mất kết nối. Đang chờ reconnect sau 10 giây...`);
-      this.currentHostIndex = (this.currentHostIndex + 1) % this.hosts.length;
-      
-      if (this.statsPromiseReject) {
-        this.statsPromiseReject(new Error('Bot bị ngắt kết nối đột ngột trong lúc lấy dữ liệu.'));
-        this.cleanupStatsState();
+      this.lastDisconnectAt = Date.now();
+      this.currentHostIndex = this.hosts.length > 0
+        ? (this.currentHostIndex + 1) % this.hosts.length
+        : 0;
+
+      this.cleanupStatsState();
+      const endReason = parseKickReason(reason || 'socket closed');
+      this.logEvent('warn', 'DISCONNECTED', {
+        reason: endReason,
+        nextHost: this.hosts[this.currentHostIndex] || '',
+        networkRecovery: this.recoveryInProgress
+      });
+
+      if (!this.recoveryInProgress) {
+        this.emit('notifyAdmin', `🔴 **Worker [\`${this.credentials.username}\`]** mất kết nối. Đang tự reconnect...`);
       }
 
-      this.scheduleReconnect();
+      this.scheduleReconnect(this.recoveryInProgress ? 15000 : undefined);
     });
 
     this.bot.once('spawn', () => {
       this.isBotOnline = true;
       this.isReady = false;
+      this.recoveryInProgress = false;
+      this.recoveryAttempts = 0;
+      this.lastRestrictionSignature = '';
+      this.metrics.successfulSpawns += 1;
+      this.logEvent('info', 'SPAWN_SUCCESS', { host: this.hosts[this.currentHostIndex] || '', port: this.port });
       console.log(`[MC-Bot] Đã spawn vào server thành công! Bắt đầu kịch bản AFK.`);
 
       // Quét toàn bộ người chơi hiện có trong Tablist khi vừa spawn
@@ -425,27 +659,16 @@ class PersistentBot extends EventEmitter {
 
       // Lắng nghe tin nhắn từ server để tự động đăng nhập & phát hiện bị đá ra lobby / bị ban
     this.bot.on('message', (jsonMsg) => {
-      const msgText = jsonMsg.toString();
-      const cleanMsg = cleanMinecraftText(msgText);
+      const cleanMsg = parseKickReason(jsonMsg?.toString ? jsonMsg.toString() : jsonMsg);
       console.log(`[MC-Bot Chat] ${cleanMsg}`);
-      const lowerMsg = cleanMsg.toLowerCase();
+      const lowerMsg = normalizeDetectionText(cleanMsg);
       
       // Bỏ qua các thông báo hệ thống / nội quy mặc định của KingMC
-      const isSystemNotice = lowerMsg.includes('điều này là bị cấm') || 
-                             lowerMsg.includes('dieu nay la bi cam') || 
-                             lowerMsg.includes('điều này bị cấm') || 
+      const isSystemNotice = lowerMsg.includes('dieu nay la bi cam') ||
                              lowerMsg.includes('dieu nay bi cam');
       
       // 1. Kiểm tra xem có phải thông báo giới hạn IP hoặc cấm IP không
-      if (checkIpLimit(lowerMsg)) {
-        console.warn(`[MC-Bot] 🚨 ĐÃ PHÁT HIỆN GIỚI HẠN IP HOẶC BỊ CẤM IP: ${cleanMsg}`);
-        this.isIpLimited = true;
-        this.emit('ipLimitDetected', { 
-          username: this.credentials.username, 
-          reason: cleanMsg 
-        });
-        this.emit('notifyAdmin', `🚨 **Worker [\`${this.credentials.username}\`]** đạt giới hạn đăng ký IP KingMC: \`${cleanMsg}\``);
-        if (this.bot) this.bot.end('Reconnecting due to IP Limit');
+      if (this.handleNetworkRestriction(cleanMsg, 'message')) {
         return;
       }
 
@@ -894,15 +1117,28 @@ class PersistentBot extends EventEmitter {
     });
   }
 
-  scheduleReconnect(delay = 10000) {
+  scheduleReconnect(delay) {
     this.clearAllTimers();
     this.isReady = false;
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-    
-    if (this.isIpLimited) {
-      console.warn(`[MC-Bot] 🛑 Bot đang bị giới hạn IP, tạm hoãn reconnect dồn dập (chờ 60s để Render tạo container mới)...`);
-      delay = 60000;
+    if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
+
+    const baseDelay = Number.isFinite(delay)
+      ? Math.max(3000, delay)
+      : Math.min(60000, 10000 + Math.max(0, this.metrics.reconnects) * 5000);
+
+    if (this.isIpLimited || this.recoveryInProgress) {
+      delay = Math.max(15000, baseDelay);
+    } else {
+      delay = baseDelay;
     }
+
+    this.metrics.reconnects += 1;
+    this.logEvent('info', 'RECONNECT_SCHEDULED', {
+      delayMs: delay,
+      nextHost: this.hosts[this.currentHostIndex] || '',
+      networkRecovery: this.recoveryInProgress
+    });
 
     this.reconnectTimeout = setTimeout(() => {
       this.connect();
@@ -911,6 +1147,10 @@ class PersistentBot extends EventEmitter {
 
   clearAllTimers() {
     this.afkRoutineRunning = false;
+    if (this.recoveryTimer) {
+      clearTimeout(this.recoveryTimer);
+      this.recoveryTimer = null;
+    }
     for (const t of this.afkTimers) {
       clearTimeout(t);
     }
