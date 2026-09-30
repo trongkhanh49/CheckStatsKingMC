@@ -198,6 +198,9 @@ async function createWorkerService(account, options = {}) {
     { key: 'WORKER_SECRET', value: String(workerSecret || process.env.WORKER_SECRET || '') },
     { key: 'MC_SERVER_HOSTS', value: String(mcServerHosts || process.env.MC_SERVER_HOSTS || 'sgp.kingmc.vn,kingmc.vn') },
     { key: 'MC_SERVER_PORT', value: String(mcServerPort || process.env.MC_SERVER_PORT || '25565') },
+    { key: 'MC_USERNAME', value: String(process.env.MC_USERNAME || '') },
+    { key: 'MC_PASSWORD', value: String(process.env.MC_PASSWORD || '') },
+    { key: 'MC_AUTH_TYPE', value: String(process.env.MC_AUTH_TYPE || 'offline') },
     { key: 'NODE_ENV', value: 'production' }
   ];
 
