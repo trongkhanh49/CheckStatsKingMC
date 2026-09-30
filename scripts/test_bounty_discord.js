@@ -86,7 +86,7 @@ async function run() {
         const embedTop = new EmbedBuilder()
           .setTitle(`${netherStarEmoji} **Top 5 Bounty** ${netherStarEmoji}`)
           .setColor('#2b2d31')
-          .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+          .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
           .setTimestamp();
 
         if (topResult.bounties && topResult.bounties.length > 0) {
@@ -124,7 +124,7 @@ async function run() {
               `👤 **Người chơi:** \`${checkResult.player}\`\n` +
               `${emeraldEmoji} **Tiền thưởng hiện tại:** \`${checkResult.amount}\`\n\n\u200B`
             )
-            .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+            .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
             .setTimestamp();
 
           await channel.send({ embeds: [embedCheck] });
@@ -134,7 +134,7 @@ async function run() {
             .setColor('#ef4444')
             .setDescription(`${barrierEmoji} **${checkResult.error || `Người chơi không hợp lệ: ${testTarget}`}**`)
             .setThumbnail(skinHelper.getAvatarUrl(testTarget, 64, true))
-            .setFooter({ text: 'CheckStatsKingMC • Thiết kế bởi BinhLH' })
+            .setFooter({ text: 'kingmc.vn・axolotl stats・ntkhanh' })
             .setTimestamp();
 
           await channel.send({ embeds: [embedInvalid] });
